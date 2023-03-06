@@ -1,20 +1,73 @@
 .program singlewire
 .side_set 1
 
-.define public T1 2
-.define public T2 5
-.define public T3 3
+// Emit a 2-low 2-high pulse for each 1 bit
+// Emit a 8-low 2-high pulse for each 0 bit
 
-.lang_opt python sideset_init = pico.PIO.OUT_HIGH
-.lang_opt python out_init     = pico.PIO.OUT_HIGH
-.lang_opt python out_shiftdir = 1
+// short pulse - 125 ns bad, 250 ns good
+// long pulse  - 500 ns bad, 625 ns good
+// high interval - 125 ns ok, 250 ns ok
 
 .wrap_target
-bitloop:
-    out x, 1       side 1 [T3 - 1] ; Side-set still takes place when instruction stalls
-    jmp !x do_zero side 0 [T1 - 1] ; Branch on the bit we shifted out. Positive pulse
-do_one:
-    jmp  bitloop   side 0 [T2 - 1] ; Continue driving high, for a long pulse
-do_zero:
-    nop            side 1 [T2 - 1] ; Or drive low, for a short pulse
+
+start:
+
+  set pindirs, 1       side 1 [0]
+  pull                 side 1 [0] // Pull the address from the fifo, waiting if fifo empty
+  out x, 24            side 0 [1] // Move the low 8 bits of the address to x and emit the start pulse
+  nop                  side 1 [1]
+
+  //----------
+
+addr_loop:
+  out x, 1             side 0 [0]
+  jmp !x, addr_zero    side 0 [0]
+  nop                  side 0 [2]
+addr_zero:
+  jmp !osre addr_loop  side 1 [1]
+
+  //----------
+  // Branch to either read or write based on the low bit of the address.
+
+  jmp !x, op_write     side 1 [0]
+
+  //----------
+
+op_read:
+  set y 31             side 1 [1]
+
+read_loop:                      // Loop time 1125 ns
+  set pindirs, 1       side 0 [1] // 000 ns - Start pulse. Target will drive pin low starting immediately and continue for ~800 ns to signal 0.
+  set pindirs, 0       side 0 [1] // 250 ns - Release start pulse, wait 250 ns for pin to rise if target isn't driving it
+  in pins, 1           side 0 [2] // 500 ns - Read pin and then wait 375 ns for target to release it.
+  jmp y-- read_loop    side 0 [1] // 875 ns - Target has released pin. Wait 250 ns for it to rise before the next start pulse.
+
+  jmp end              side 1 [0]
+
+  //----------
+
+op_write:
+  pull                 side 1 [0]
+
+write_loop:
+  out x, 1             side 0 [0]
+  jmp !x, data_zero    side 0 [0]
+  nop                  side 0 [2]
+data_zero:
+  jmp !osre write_loop side 1 [1]
+
+  // Signal that we're done
+  in null, 32          side 1 [0]
+
+  jmp end              side 1 [0]
+
+  //----------
+
+end:
+  // Delay must be at least 12 so we get a >2us interval between packets
+  nop       side 1 [5]
+  jmp start side 1 [6]
+
+  //----------
+
 .wrap
