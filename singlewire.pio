@@ -1,6 +1,15 @@
 .program singlewire
 .side_set 1
 
+
+
+
+// TODO - Block mode, use y as block counter
+
+
+
+
+
 // Emit a 2-low 2-high pulse for each 1 bit
 // Emit a 8-low 2-high pulse for each 0 bit
 
@@ -34,13 +43,13 @@ addr_zero:
   //----------
 
 op_read:
-  set y 31             side 1 [1]
+  set x 31             side 1 [1]
 
-read_loop:                      // Loop time 1125 ns
+read_loop:                        // Loop time 1000 ns
   set pindirs, 1       side 0 [1] // 000 ns - Start pulse. Target will drive pin low starting immediately and continue for ~800 ns to signal 0.
   set pindirs, 0       side 0 [1] // 250 ns - Release start pulse, wait 250 ns for pin to rise if target isn't driving it
-  in pins, 1           side 0 [2] // 500 ns - Read pin and then wait 375 ns for target to release it.
-  jmp y-- read_loop    side 0 [1] // 875 ns - Target has released pin. Wait 250 ns for it to rise before the next start pulse.
+  in pins, 1           side 0 [1] // 500 ns - Read pin and then wait 375 ns for target to release it.
+  jmp x-- read_loop    side 0 [1] // 750 ns - Target should release pin shortly. Wait 250 ns for it to rise before the next start pulse.
 
   jmp end              side 1 [0]
 
