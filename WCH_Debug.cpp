@@ -57,7 +57,7 @@ void SLDebugger::reset() {
   //busy_wait((10 * 120000000 / 1000) / 8);
   // busy_wait(84) = 5.80 us will     disable the debug interface = 46.40T
   // busy_wait(85) = 5.72 us will not disable the debug interface = 45.76T
-  busy_wait(100);
+  busy_wait(100); // ~8 usec
   sio_hw->gpio_set  = (1 << swd_pin);
   busy_wait(100);
   iobank0_hw->io[swd_pin].ctrl = GPIO_FUNC_PIO0 << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB;

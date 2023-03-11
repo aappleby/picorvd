@@ -38,19 +38,20 @@
 
 start:
 
-  set pindirs, 1       side 1 [1]
-  pull                 side 1 [1] // Pull the address from the fifo, waiting if fifo empty
-  out x, 24            side 0 [3] // Move the low 8 bits of the address to x and emit the start pulse
-  nop                  side 1 [3]
+  set pindirs, 1       side 1 [3]
+  pull                 side 1 [0] // Pull the address from the fifo, waiting if fifo empty
+  out x, 24            side 0 [1] // Move the low 8 bits of the address to x and emit the start pulse
+  nop                  side 1 [0]
 
   //----------
 
 addr_loop:
-  out x, 1             side 0 [1]
-  jmp !x, addr_zero    side 0 [1]
+  nop                  side 1 [0]
+  out x, 1             side 0 [0]
+  jmp !x, addr_zero    side 0 [0]
   nop                  side 0 [5]
 addr_zero:
-  jmp !osre addr_loop  side 1 [2]
+  jmp !osre addr_loop  side 1 [0]
 
   //----------
   // Branch to either read or write based on the low bit of the address.
@@ -63,10 +64,10 @@ op_read:
   set x 31             side 1 [2]
 
 read_loop:                        // Loop time 1000 ns
-  set pindirs, 1       side 0 [3] // 000 ns - Start pulse. Target will drive pin low starting immediately and continue for ~800 ns to signal 0.
-  set pindirs, 0       side 0 [2] // 250 ns - Release start pulse, wait 250 ns for pin to rise if target isn't driving it
-  in pins, 1           side 0 [3] // 500 ns - Read pin and then wait 375 ns for target to release it.
-  jmp x-- read_loop    side 0 [3] // 750 ns - Target should release pin shortly. Wait 250 ns for it to rise before the next start pulse.
+  set pindirs, 1       side 0 [1] // 000 ns - Start pulse. Target will drive pin low starting immediately and continue for ~800 ns to signal 0.
+  set pindirs, 0       side 0 [2] // 200 ns - Release start pulse, wait for pin to rise if target isn't driving it
+  in pins, 1           side 0 [2] // 500 ns - Read pin and then wait for target to release it.
+  jmp x-- read_loop    side 0 [1] // 800 ns - Pin should be going high by now. 
 
   // Delay must be at least 12 so we get a >2us interval between packets or we lose sync or something
   jmp start            side 1 [15]
@@ -74,14 +75,14 @@ read_loop:                        // Loop time 1000 ns
   //----------
 
 op_write:
-  pull                 side 1 [2]
+  pull                 side 1 [0]
 
 write_loop:
-  out x, 1             side 0 [1]
-  jmp !x, data_zero    side 0 [1]
+  out x, 1             side 0 [0]
+  jmp !x, data_zero    side 0 [0]
   nop                  side 0 [5]
 data_zero:
-  jmp !osre write_loop side 1 [2]
+  jmp !osre write_loop side 1 [1]
 
   // Delay must be at least 12 so we get a >2us interval between packets or we lose sync or something
   jmp start            side 1 [15]
