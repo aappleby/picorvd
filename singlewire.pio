@@ -1,39 +1,56 @@
 .program singlewire
 .side_set 1
 
+// Debug interface runs off HSI/3, or 24 Mhz/3 = 8 Mhz
+// Default mode is 'normal'
 
+// Reset interface via 256T = 125 ns * 256 = 32 us
 
+// 
+
+// Fast mode:
+// 1    = low 1T to  2T, high 1T to  8T
+// 0    = low 4T to 32T, high 1T to  8T
+// Stop = high 10T
+
+// Normal mode:
+// 1    = low 1T to  4T, high 1T to 16T
+// 0    = low 6T to 64T, high 1T to 16T
+// Stop = high 18T
+
+// If T = 125 ns
+
+// Fast mode:
+// 1    = low 125ns to  250ns, high 125ns to 1000ns
+// 0    = low 500ns to 4000ns, high 125ns to 1000ns
+// Stop = high 1250 ns
+
+// Normal mode:
+// 1    = low 125ns to  500ns, high 125ns to 2000ns
+// 0    = low 750ns to 8000ns, high 125ns to 2000ns
+// Stop = high 2250 ns
+
+// So we must be in normal mode as if the stop bit is less than 2250 ns it doesn't work
 
 // TODO - Block mode, use y as block counter
-
-
-
-
-
-// Emit a 2-low 2-high pulse for each 1 bit
-// Emit a 8-low 2-high pulse for each 0 bit
-
-// short pulse - 125 ns bad, 250 ns good
-// long pulse  - 500 ns bad, 625 ns good
-// high interval - 125 ns ok, 250 ns ok
 
 .wrap_target
 
 start:
 
-  set pindirs, 1       side 1 [0]
-  pull                 side 1 [0] // Pull the address from the fifo, waiting if fifo empty
-  out x, 24            side 0 [1] // Move the low 8 bits of the address to x and emit the start pulse
-  nop                  side 1 [1]
+  set pindirs, 1       side 1 [1]
+  pull                 side 1 [1] // Pull the address from the fifo, waiting if fifo empty
+  out x, 24            side 0 [3] // Move the low 8 bits of the address to x and emit the start pulse
+  nop                  side 1 [3]
 
   //----------
 
 addr_loop:
-  out x, 1             side 0 [0]
-  jmp !x, addr_zero    side 0 [0]
-  nop                  side 0 [3]
+  out x, 1             side 0 [1]
+  jmp !x, addr_zero    side 0 [1]
+  nop                  side 0 [5]
 addr_zero:
-  jmp !osre addr_loop  side 1 [1]
+  jmp !osre addr_loop  side 1 [2]
 
   //----------
   // Branch to either read or write based on the low bit of the address.
@@ -43,32 +60,30 @@ addr_zero:
   //----------
 
 op_read:
-  set x 31             side 1 [1]
+  set x 31             side 1 [2]
 
 read_loop:                        // Loop time 1000 ns
-  set pindirs, 1       side 0 [1] // 000 ns - Start pulse. Target will drive pin low starting immediately and continue for ~800 ns to signal 0.
-  set pindirs, 0       side 0 [1] // 250 ns - Release start pulse, wait 250 ns for pin to rise if target isn't driving it
-  in pins, 1           side 0 [1] // 500 ns - Read pin and then wait 375 ns for target to release it.
-  jmp x-- read_loop    side 0 [1] // 750 ns - Target should release pin shortly. Wait 250 ns for it to rise before the next start pulse.
+  set pindirs, 1       side 0 [3] // 000 ns - Start pulse. Target will drive pin low starting immediately and continue for ~800 ns to signal 0.
+  set pindirs, 0       side 0 [2] // 250 ns - Release start pulse, wait 250 ns for pin to rise if target isn't driving it
+  in pins, 1           side 0 [3] // 500 ns - Read pin and then wait 375 ns for target to release it.
+  jmp x-- read_loop    side 0 [3] // 750 ns - Target should release pin shortly. Wait 250 ns for it to rise before the next start pulse.
 
   // Delay must be at least 12 so we get a >2us interval between packets or we lose sync or something
-  nop side 1 [15]
   jmp start            side 1 [15]
 
   //----------
 
 op_write:
-  pull                 side 1 [0]
+  pull                 side 1 [2]
 
 write_loop:
-  out x, 1             side 0 [0]
-  jmp !x, data_zero    side 0 [0]
-  nop                  side 0 [3]
+  out x, 1             side 0 [1]
+  jmp !x, data_zero    side 0 [1]
+  nop                  side 0 [5]
 data_zero:
-  jmp !osre write_loop side 1 [1]
+  jmp !osre write_loop side 1 [2]
 
   // Delay must be at least 12 so we get a >2us interval between packets or we lose sync or something
-  nop side 1 [15]
   jmp start            side 1 [15]
 
 .wrap

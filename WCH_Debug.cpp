@@ -35,7 +35,7 @@ void SLDebugger::init(int swd_pin) {
   sm_config_set_sideset_pins(&c, swd_pin);
   sm_config_set_out_shift   (&c, /*shift_right*/ false, /*autopull*/ false, 32);
   sm_config_set_in_shift    (&c, /*shift_right*/ false, /*autopush*/ true, /*push_threshold*/ 32);
-  sm_config_set_clkdiv      (&c, 15);
+  sm_config_set_clkdiv      (&c, 10);
 
   pio_sm_init(pio0, sm, offset, &c);
   pio_sm_set_enabled(pio0, sm, true);
@@ -54,9 +54,12 @@ void SLDebugger::reset() {
   iobank0_hw->io[swd_pin].ctrl = GPIO_FUNC_SIO << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB;
   sio_hw->gpio_clr    = (1 << swd_pin);
   sio_hw->gpio_oe_set = (1 << swd_pin);
-  busy_wait((2.5 * 120000000 / 1000) / 8);
-  sio_hw->gpio_set    = (1 << swd_pin);
-  busy_wait((3 * 120000000 / 1000000) / 8);
+  //busy_wait((10 * 120000000 / 1000) / 8);
+  // busy_wait(84) = 5.80 us will     disable the debug interface = 46.40T
+  // busy_wait(85) = 5.72 us will not disable the debug interface = 45.76T
+  busy_wait(100);
+  sio_hw->gpio_set  = (1 << swd_pin);
+  busy_wait(100);
   iobank0_hw->io[swd_pin].ctrl = GPIO_FUNC_PIO0 << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB;
 
   active_prog = nullptr;
@@ -105,13 +108,13 @@ void SLDebugger::read_bus32(uint32_t addr, void* out) {
 
 void SLDebugger::halt() {
   put(ADDR_DMCONTROL, 0x80000001);
-  while (!get_dmstatus().ANYHALTED);
+  //while (!get_dmstatus().ANYHALTED);
   put(ADDR_DMCONTROL, 0x00000001);
 }
 
 void SLDebugger::unhalt() {
   put(ADDR_DMCONTROL, 0x40000001);
-  while (get_dmstatus().ANYHALTED);
+  //while (get_dmstatus().ANYHALTED);
   put(ADDR_DMCONTROL, 0x00000001);
 }
 
