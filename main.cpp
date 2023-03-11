@@ -24,6 +24,7 @@ int main() {
 
   while(1) {
     sl.reset();
+    sl.halt();
     sl.stop_watchdogs();
 
     //----------
@@ -93,16 +94,23 @@ int main() {
     printf("reg_shdwcfgr\n");   reg_shdwcfgr.dump();   printf("\n");
 #endif
 
-    sl.halt();
+    Reg_ABSTRACTCS reg_abstractcs;
+    sl.get(ADDR_ABSTRACTCS, &reg_abstractcs);
+    sl.put(ADDR_ABSTRACTCS, 0xFFFFFFFF);
 
-    printf("\033c");
+    static uint32_t temp[32];
+
     for (int i = 0; i < 16; i++) {
-      uint32_t r = sl.get_gpr(i);
-      printf("gpr %02d = 0x%08x\n", i, r);
+      temp[i] = sl.get_gpr(i);
     }
-
     sl.unhalt();
 
+    printf("\033c");
+    printf("reg_abstractcs\n"); reg_abstractcs.dump(); printf("\n");
+
+    for (int i = 0; i < 16; i++) {
+      printf("gpr %02d = 0x%08x\n", i, temp[i]);
+    }
 
     sleep_ms(30);
   }

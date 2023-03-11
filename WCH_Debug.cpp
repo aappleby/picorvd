@@ -43,20 +43,28 @@ void SLDebugger::init(int swd_pin) {
 
 //-----------------------------------------------------------------------------
 
+volatile void busy_wait(int count) {
+  volatile int c = count;
+  while(c--);
+}
+
 void SLDebugger::reset() {
   // Grab pin and send a 2 msec low pulse to reset debug module (i think?)
   // If we use the sdk functions to do this we get jitter :/
   iobank0_hw->io[swd_pin].ctrl = GPIO_FUNC_SIO << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB;
   sio_hw->gpio_clr    = (1 << swd_pin);
   sio_hw->gpio_oe_set = (1 << swd_pin);
-  for (volatile int delay = 0; delay < 24000; delay++);
+  busy_wait((2.5 * 120000000 / 1000) / 8);
   sio_hw->gpio_set    = (1 << swd_pin);
-  for (volatile int delay = 0; delay < 24; delay++);
+  busy_wait((3 * 120000000 / 1000000) / 8);
   iobank0_hw->io[swd_pin].ctrl = GPIO_FUNC_PIO0 << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB;
 
   active_prog = nullptr;
   // Reset pio block
+  pio_sm_set_enabled(pio0, 0, false);
   pio0->ctrl = 0b000100010001;
+  pio_sm_set_enabled(pio0, 0, true);
+
   put(ADDR_SHDWCFGR, 0x5AA50400);
   put(ADDR_CFGR,     0x5AA50400);
 }

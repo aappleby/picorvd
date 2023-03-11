@@ -31,7 +31,7 @@ start:
 addr_loop:
   out x, 1             side 0 [0]
   jmp !x, addr_zero    side 0 [0]
-  nop                  side 0 [2]
+  nop                  side 0 [3]
 addr_zero:
   jmp !osre addr_loop  side 1 [1]
 
@@ -51,7 +51,9 @@ read_loop:                        // Loop time 1000 ns
   in pins, 1           side 0 [1] // 500 ns - Read pin and then wait 375 ns for target to release it.
   jmp x-- read_loop    side 0 [1] // 750 ns - Target should release pin shortly. Wait 250 ns for it to rise before the next start pulse.
 
-  jmp end              side 1 [0]
+  // Delay must be at least 12 so we get a >2us interval between packets or we lose sync or something
+  nop side 1 [15]
+  jmp start            side 1 [15]
 
   //----------
 
@@ -61,21 +63,12 @@ op_write:
 write_loop:
   out x, 1             side 0 [0]
   jmp !x, data_zero    side 0 [0]
-  nop                  side 0 [2]
+  nop                  side 0 [3]
 data_zero:
   jmp !osre write_loop side 1 [1]
 
-  // Signal that we're done
-  //in null, 32          side 1 [0]
-
-  jmp end              side 1 [0]
-
-  //----------
-
-end:
   // Delay must be at least 12 so we get a >2us interval between packets or we lose sync or something
-  jmp start side 1 [12]
-
-  //----------
+  nop side 1 [15]
+  jmp start            side 1 [15]
 
 .wrap

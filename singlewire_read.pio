@@ -1,0 +1,35 @@
+.program singlewire_read
+.side_set 1
+
+.wrap_target
+
+start:
+  set pindirs, 1       side 1 [0]
+  pull                 side 1 [0] // Pull the address from the fifo, waiting if fifo empty
+  out y, 24            side 0 [1] // Move the low 8 bits of the address to x and emit the start pulse
+  nop                  side 1 [1]
+
+addr_loop:
+  out x, 1             side 0 [0]
+  jmp !x, addr_zero    side 0 [0]
+  nop                  side 0 [2]
+addr_zero:
+  jmp !osre addr_loop  side 1 [1]
+
+read_repeat:
+  set x 31             side 1 [1]
+read_loop:                        // Loop time 1000 ns
+  set pindirs, 1       side 0 [1] // 000 ns - Start pulse. Target will drive pin low starting immediately and continue for ~800 ns to signal 0.
+  set pindirs, 0       side 0 [1] // 250 ns - Release start pulse, wait 250 ns for pin to rise if target isn't driving it
+  in pins, 1           side 0 [1] // 500 ns - Read pin and then wait for target to release it.
+  jmp x-- read_loop    side 0 [1] // 750 ns - Target should release pin shortly. Wait 250 ns for it to rise before the next start pulse.
+
+
+  //jmp y-- read_repeat  side 0 [1]
+
+  // Delay must be at least 12 so we get a >2us interval between packets or we lose sync or something
+  nop       side 1 [14]
+  irq set 1 side 1 [14]
+  jmp start side 1 [14]
+
+.wrap

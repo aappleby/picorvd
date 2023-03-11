@@ -1,0 +1,36 @@
+.program singlewire_write
+.side_set 1
+
+.wrap_target
+
+start:
+  set pindirs, 1       side 1 [0]
+  pull                 side 1 [0] // Pull the address from the fifo, waiting if fifo empty
+  out y, 24            side 0 [1] // Move the block count to Y, leaving the address in O
+  nop                  side 1 [1]
+
+addr_loop:
+  out x, 1             side 0 [0]
+  jmp !x, addr_zero    side 0 [0]
+  nop                  side 0 [3]
+addr_zero:
+  jmp !osre addr_loop  side 1 [1]
+
+
+write_dword:
+  pull                 side 1 [0]
+write_loop:
+  out x, 1             side 0 [0]
+  jmp !x, data_zero    side 0 [0]
+  nop                  side 0 [3]
+data_zero:
+  jmp !osre write_loop side 1 [1]
+
+
+  // Delay must be at least 12 so we get a >2us interval between packets or we lose sync or something
+transfer_done:
+  nop       side 1 [14]
+  irq set 1 side 1 [14]
+  jmp start side 1 [14]
+
+.wrap
