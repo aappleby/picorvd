@@ -60,7 +60,7 @@ struct Reg_CPBR {
   };
 
   void dump() {
-    printf("  raw          = 0x%08x\n", raw);
+    //printf("  raw          = 0x%08x\n", raw);
     printf("  TDIV         = %d\n", TDIV);
     printf("  SOPN         = %d\n", SOPN);
     printf("  CHECKSTA     = %d\n", CHECKSTA);
@@ -92,7 +92,7 @@ struct Reg_CFGR {
   };
 
   void dump() {
-    printf("  raw          = 0x%08x\n", raw);
+    //printf("  raw          = 0x%08x\n", raw);
     printf("  TDIVCFG      = %d\n", TDIVCFG   );
     printf("  SOPNCFG      = %d\n", SOPNCFG   );
     printf("  CHECKEN      = %d\n", CHECKEN   );
@@ -124,7 +124,7 @@ struct Reg_SHDWCFGR {
   };
 
   void dump() {
-    printf("  raw          = 0x%08x\n", raw);
+    //printf("  raw          = 0x%08x\n", raw);
     printf("  TDIVCFG      = %d\n", TDIVCFG   );
     printf("  SOPNCFG      = %d\n", SOPNCFG   );
     printf("  CHECKEN      = %d\n", CHECKEN   );
@@ -153,7 +153,7 @@ struct Reg_DMCTRL {
   };
 
   void dump() {
-    printf("  raw           = 0x%08x\n", raw);
+    //printf("  raw           = 0x%08x\n", raw);
     printf("  DMACTIVE      = %d\n", DMACTIVE);
     printf("  NDMRESET      = %d\n", NDMRESET);
     printf("  ACKHAVERESET  = %d\n", ACKHAVERESET);
@@ -188,6 +188,7 @@ struct Reg_DMSTATUS {
   };
 
   void dump() {
+    /*
     printf("  raw           = 0x%08x\n", raw);
     printf("  VERSION       = %d\n", VERSION       );
     printf("  AUTHENTICATED = %d\n", AUTHENTICATED );
@@ -201,6 +202,15 @@ struct Reg_DMSTATUS {
     printf("  ALLRESUMEACK  = %d\n", ALLRESUMEACK  );
     printf("  ANYHAVERESET  = %d\n", ANYHAVERESET  );
     printf("  ALLHAVERESET  = %d\n", ALLHAVERESET  );
+    */
+    printf("  ");
+    if      (ALLHALTED)  printf("+halt ");
+    else if (ANYHALTED)  printf("?halt ");
+    else                 printf("!halt ");
+    if      (ALLRUNNING) printf("+run ");
+    else if (ANYRUNNING) printf("?run ");
+    else                 printf("!run ");
+    printf("\n");
   }
 };
 static_assert(sizeof(Reg_DMSTATUS) == 4);
@@ -221,7 +231,7 @@ struct Reg_HARTINFO {
   };
 
   void dump() {
-    printf("  raw           = 0x%08x\n", raw);
+    //printf("  raw           = 0x%08x\n", raw);
     printf("  DATAADDR      = %d\n", DATAADDR  );
     printf("  DATASIZE      = %d\n", DATASIZE  );
     printf("  DATAACCESS    = %d\n", DATAACCESS);
@@ -250,7 +260,7 @@ struct Reg_ABSTRACTCS {
   };
 
   void dump() {
-    printf("  raw           = 0x%08x\n", raw);
+    //printf("  raw           = 0x%08x\n", raw);
     printf("  DATACOUNT     = %d\n", DATACOUNT  );
     printf("  CMDER         = %d\n", CMDER      );
     printf("  BUSY          = %d\n", BUSY       );
@@ -277,7 +287,7 @@ struct Reg_COMMAND {
   };
 
   void dump() {
-    printf("  raw           = 0x%08x\n", raw);
+    //printf("  raw           = 0x%08x\n", raw);
     printf("  REGNO         = 0x%x\n", REGNO      );
     printf("  WRITE         = %d\n", WRITE      );
     printf("  TRANSFER      = %d\n", TRANSFER   );
@@ -302,7 +312,7 @@ struct Reg_AUTOCMD {
   };
 
   void dump() {
-    printf("  raw           = 0x%08x\n", raw);
+    //printf("  raw           = 0x%08x\n", raw);
     printf("  AUTOEXECDATA  = %d\n", AUTOEXECDATA);
     printf("  AUTOEXECPROG  = %d\n", AUTOEXECPROG);
   }
@@ -321,7 +331,7 @@ struct Reg_HALTSUM0 {
   };
 
   void dump() {
-    printf("  raw           = 0x%08x\n", raw);
+    //printf("  raw           = 0x%08x\n", raw);
     printf("  HALTSUM0      = %d\n", HALTSUM0);
   }
 };
@@ -349,7 +359,7 @@ struct Reg_DCSR {
   };
 
   void dump() {
-    printf("  raw           = 0x%08x\n", raw);
+    //printf("  raw           = 0x%08x\n", raw);
     printf("  PRV           = %d\n", PRV       );
     printf("  STEP          = %d\n", STEP      );
     printf("  CAUSE         = %d\n", CAUSE     );
@@ -371,23 +381,32 @@ struct SLDebugger {
   void get(uint8_t addr, void* out) const;
   void put(uint8_t addr, uint32_t data) const;
 
+  void get_mem32(uint32_t addr, void* data);
+  void put_mem32(uint32_t addr, void* data);
+
+  uint32_t get_gpr(int index) const;
+  void     put_gpr(int index, uint32_t gpr);
+
+  uint32_t get_csr(int index) const;
+
   void halt();
   void unhalt();
-  void read_bus32(uint32_t addr, void* out);
   void stop_watchdogs();
 
   const Reg_DMSTATUS   get_dmstatus() const;
   const Reg_ABSTRACTCS get_abstatus() const;
 
-  uint32_t get_gpr(int index) const;
-  uint32_t get_csr(int index) const;
-  void get_mem_block(uint32_t base, int size_bytes, void* out);
-
   int swd_pin = -1;
   uint32_t* active_prog = nullptr;
 
   void load_prog(uint32_t* prog);
+
+  void save_regs();
+  void load_regs();
+
+  int  reg_count = 16;
+  bool reg_saved = false;
+  uint32_t regfile[32];
 };
 
 //------------------------------------------------------------------------------
-

@@ -8,7 +8,16 @@
 
 const uint SWD_PIN = 14;
 
-//-----------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+
+void mix(uint32_t& x) {
+  x *= 0x1234567;
+  x ^= x >> 16;
+  x *= 0x1234567;
+  x ^= x >> 16;
+}
+
+//------------------------------------------------------------------------------
 
 int main() {
   set_sys_clock_khz(100000, true);
@@ -20,140 +29,46 @@ int main() {
   SLDebugger sl;
   sl.init(SWD_PIN);
 
+  uint32_t temp[32];
+  int rep = 0;
+
   printf("\033[2J");
 
   while(1) {
     sl.reset();
-    //sl.halt();
-    //sl.stop_watchdogs();
-
-    //----------
-#if 0
-    uint32_t       data0;
-    uint32_t       data1;
-    Reg_DMCTRL     reg_dmctrl;
-    Reg_DMSTATUS   reg_dmstatus;
-    Reg_HARTINFO   reg_hartinfo;
-    Reg_ABSTRACTCS reg_abstractcs;
-    Reg_COMMAND    reg_command;
-    Reg_AUTOCMD    reg_autocmd;
-    Reg_HALTSUM0   reg_haltsum0;
-    Reg_CPBR       reg_cpbr;
-    Reg_CFGR       reg_cfgr;
-    Reg_SHDWCFGR   reg_shdwcfgr;
-
     sl.halt();
-    sl.get(ADDR_DATA0,      &data0);
-    sl.get(ADDR_DATA1,      &data1);
-    sl.get(ADDR_DMCONTROL,  &reg_dmctrl);
-    sl.get(ADDR_DMSTATUS,   &reg_dmstatus);
-    sl.get(ADDR_HARTINFO,   &reg_hartinfo);
-    sl.get(ADDR_ABSTRACTCS, &reg_abstractcs);
-    sl.get(ADDR_COMMAND,    &reg_command);
-    sl.get(ADDR_AUTOCMD,    &reg_autocmd);
-    sl.get(ADDR_HALTSUM0,   &reg_haltsum0);
-    sl.get(ADDR_CPBR,       &reg_cpbr);
-    sl.get(ADDR_CFGR,       &reg_cfgr);
-    sl.get(ADDR_SHDWCFGR,   &reg_shdwcfgr);
+    sl.stop_watchdogs();
 
-    uint32_t part0, part1, part2, part3, part4;
-    sl.read_bus32(0x1FFFF7E0, &part0);
-    sl.read_bus32(0x1FFFF7E8, &part1);
-    sl.read_bus32(0x1FFFF7EC, &part2);
-    sl.read_bus32(0x1FFFF7F0, &part3);
-    sl.read_bus32(0x1FFFF7C4, &part4);
-    sl.unhalt();
+#if 1
+    sl.save_regs();
 
-    static int rep = 0;
-
-    printf("\033c");
-    printf("rep    %d\n", rep++);
-    printf("\n");
-
-    printf("part0 0x%08x\n", part0);
-    printf("part1 0x%08x\n", part1);
-    printf("part2 0x%08x\n", part2);
-    printf("part3 0x%08x\n", part3);
-    printf("part4 0x%08x\n", part4);
-    printf("\n");
-
-    printf("data0 0x%08x\n", data0);
-    printf("data1 0x%08x\n", data1);
-    printf("\n");
-
-    printf("reg_dmctrl\n");     reg_dmctrl.dump();     printf("\n");
-    printf("reg_dmstatus\n");   reg_dmstatus.dump();   printf("\n");
-    printf("reg_hartinfo\n");   reg_hartinfo.dump();   printf("\n");
-    printf("reg_abstractcs\n"); reg_abstractcs.dump(); printf("\n");
-    printf("reg_command\n");    reg_command.dump();    printf("\n");
-    printf("reg_autocmd\n");    reg_autocmd.dump();    printf("\n");
-    printf("reg_haltsum0\n");   reg_haltsum0.dump();   printf("\n");
-    printf("reg_cpbr\n");       reg_cpbr.dump();       printf("\n");
-    printf("reg_cfgr\n");       reg_cfgr.dump();       printf("\n");
-    printf("reg_shdwcfgr\n");   reg_shdwcfgr.dump();   printf("\n");
-#endif
-
-
-    //uint32_t temp_a, temp_b, temp_c, temp_d;
-
-    //sl.put(ADDR_DMCONTROL, 0x80000002);
-    sl.put(ADDR_DMCONTROL, 0x80000001);
-    sl.put(ADDR_DMCONTROL, 0x10000001);
-
-    //sl.put(ADDR_DMCONTROL, 0x80000003);
-    //sl.get(ADDR_DMCONTROL, &temp_a);
-    //sl.put(ADDR_DMCONTROL, 0x80000002);
-    //sl.get(ADDR_DMCONTROL, &temp_b);
-
-
-    /*
-    Reg_CFGR       reg_cfgr;
-    sl.get(ADDR_CFGR,       &reg_cfgr);
+    for (int i = 0; i < 16; i++) {
+      sl.put_gpr(i, 0xCAFED00D);
+    }
 
     Reg_ABSTRACTCS reg_abstractcs;
     sl.get(ADDR_ABSTRACTCS, &reg_abstractcs);
-    //sl.put(ADDR_ABSTRACTCS, 0xFFFFFFFF);
+
+    sl.load_regs();
 
     static uint32_t temp[32];
-
     for (int i = 0; i < 16; i++) {
       temp[i] = sl.get_gpr(i);
     }
-    */
 
-    //sl.put(ADDR_BUF0, 0xFFFFFFFF);
-    //sl.get(ADDR_BUF0, &temp_b);
-
-    //sl.unhalt();
-    //sl.put(ADDR_DMCONTROL, 0x40000001);
-    //put(ADDR_DMCONTROL, 0x00000001);
-
-    Reg_DMCTRL     reg_dmctrl;
-    Reg_DMSTATUS   reg_dmstatus;
-    Reg_ABSTRACTCS reg_abstractcs;
-    sl.get(ADDR_DMCONTROL,  &reg_dmctrl);
-    sl.get(ADDR_DMSTATUS,   &reg_dmstatus);
-    sl.get(ADDR_ABSTRACTCS, &reg_abstractcs);
+    sl.unhalt();
 
     printf("\033c");
-    printf("reg_dmctrl\n");     reg_dmctrl.dump();     printf("\n");
-    printf("reg_dmstatus\n");   reg_dmstatus.dump();   printf("\n");
-    printf("reg_abstractcs\n"); reg_abstractcs.dump(); printf("\n");
-
-    //printf("reg_cfgr\n");       reg_cfgr.dump();       printf("\n");
-    //printf("reg_abstractcs\n"); reg_abstractcs.dump(); printf("\n");
-
-    //printf("temp_a 0x%08x\n", temp_a);
-    //printf("temp_b 0x%08x\n", temp_b);
-    //printf("temp_c 0x%08x\n", temp_c);
-    //printf("temp_d 0x%08x\n", temp_d);
-
-    /*
+    printf("rep %d\n", rep++);
     for (int i = 0; i < 16; i++) {
       printf("gpr %02d = 0x%08x\n", i, temp[i]);
     }
-    */
+    printf("\n");
 
-    sleep_ms(30);
+    printf("reg_abstractcs\n"); reg_abstractcs.dump(); printf("\n");
+
+#endif
+
+    sleep_ms(500);
   }
 }
