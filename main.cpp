@@ -45,6 +45,18 @@ void mix(uint32_t& x) {
   x ^= x >> 16;
 }
 
+//------------------------------------------------------------------------------
+
+void on_status(SLDebugger& sl) {
+  ser_printf("on_status()\n");
+
+  usb_printf("Status message!\n");
+
+  ser_printf("on_status() done\n");
+}
+
+//------------------------------------------------------------------------------
+
 void test_thingy(SLDebugger& sl) {
   printf("testing thingy\n");
 
@@ -259,18 +271,16 @@ void dump_csrs(SLDebugger& sl) {
 //------------------------------------------------------------------------------
 
 int main() {
+  set_sys_clock_khz(100000, true);
   stdio_usb_init();
   while(!stdio_usb_connected());
+  sleep_ms(100);
 
   uart_init(uart0, 3000000);
   gpio_set_function(0, GPIO_FUNC_UART);
   gpio_set_function(1, GPIO_FUNC_UART);  
 
-#if 0
-  set_sys_clock_khz(100000, true);
-  sleep_ms(100);
-#endif
-
+  /*
   static int rep = 0;
   while(1) {
     usb_printf("Hello World usb %d\n", rep);
@@ -278,8 +288,8 @@ int main() {
     rep++;
     sleep_ms(100);
   }
+  */
 
-#if 0
   SLDebugger sl;
   sl.init(SWD_PIN);
   sl.reset();
@@ -288,6 +298,9 @@ int main() {
   uint8_t cursor = 0;
 
   printf("\033[2J");
+  usb_printf("PicoDebug 0.0.0\n");
+  ser_printf("<debug log begin>\n");
+
   while(1) {
     printf("> ");
     while(1) {
@@ -309,6 +322,7 @@ int main() {
       }
     }
 
+    if (strcmp(command, "status") == 0)     on_status(sl);
     if (strcmp(command, "test1") == 0)      test_thingy(sl);
     if (strcmp(command, "test2") == 0)      test_other_thingy(sl);
     if (strcmp(command, "dump_csrs") == 0)  dump_csrs(sl);
@@ -319,5 +333,4 @@ int main() {
     cursor = 0;
     command[cursor] = 0;
   }
-#endif
 }
