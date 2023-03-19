@@ -260,6 +260,7 @@ void dump_csrs(SLDebugger& sl) {
 
 int main() {
   stdio_usb_init();
+  while(!stdio_usb_connected());
 
   uart_init(uart0, 3000000);
   gpio_set_function(0, GPIO_FUNC_UART);
