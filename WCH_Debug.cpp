@@ -2,6 +2,9 @@
 
 #include "build/singlewire.pio.h"
 
+// DATA0 @ 0xE00000F4
+// DATA1 @ 0xE00000F8
+
 static const uint32_t cmd_runprog = 0x00040000;
 
 volatile void busy_wait(int count) {
@@ -61,7 +64,8 @@ void SLDebugger::reset() {
   put(ADDR_CFGR,     0x5AA50400);
 
   // Turn debug module on
-  put(ADDR_DMCONTROL, 0x00000001);
+
+  put(ADDR_DMCONTROL, 0x10000001);
 
   // Clear error status
   put(ADDR_ABSTRACTCS, 0x00000700);
@@ -82,9 +86,18 @@ void SLDebugger::unhalt() {
 }
 
 // Where did this come from?
+// It's from "Chapter 18 Debug Support (DBG)"
+// 0x7C0 is a CSR that controls watchdogs and timers in debug mode
 void SLDebugger::stop_watchdogs() {
   put(ADDR_DATA0,     0x00000003);
   put(ADDR_COMMAND,   0x002307C0);
+}
+
+void SLDebugger::reset_cpu() {
+  // signal NDMRESET
+  put(ADDR_DMCONTROL, 0x00000003);
+  while(!get_dmstatus().ALLHAVERESET);
+  put(ADDR_DMCONTROL, 0x10000001);
 }
 
 //-----------------------------------------------------------------------------
@@ -115,18 +128,46 @@ void SLDebugger::put(uint8_t addr, uint32_t data) const {
 
 //-----------------------------------------------------------------------------
 
-void SLDebugger::get_mem32(uint32_t addr, void* data) {
-  static uint32_t prog_get32[8] = {
-    0x7b251073, // csrw 0x7b2, a0
-    0x7b359073, // csrw 0x7b3, a1
-    0xe0000537, // lui  a0, 0xe0000
-    0x0f852583, // lw   a1, 248(a0)
-    0x0005a583, // lw   a1, 0(a1)
-    0x0eb52a23, // sw   a1, 244(a0)
-    0x7b202573, // csrr a0, 0x7b2
-    0x7b3025f3, // csrr a1, 0x7b3
-  };
+static uint32_t prog_get32[8] = {
+  0x7b251073, // csrw 0x7B2, a0
+  0x7b359073, // csrw 0x7B3, a1
+  0xe0000537, // lui  a0, 0xE0000
+  0x0f852583, // lw   a1, 0x0F8(a0)
+  0x0005a583, // lw   a1, 0x000(a1)
+  0x0eb52a23, // sw   a1, 0x0F4(a0)
+  0x7b202573, // csrr a0, 0x7b2
+  0x7b3025f3, // csrr a1, 0x7b3
+};
 
+static uint32_t prog_put32[8] = {
+  0x7b251073, // csrw 0x7B2, a0
+  0x7b359073, // csrw 0x7B3, a1
+  0xe0000537, // lui  a0, 0xE0000
+  0x0f852583, // lw   a1, 0x0F8(a0)
+  0x0f452503, // lw   a0, 0x0F4(a0)
+  0x00a5a023, // sw   a0, 0x000(a1)
+  0x7b202573, // csrr a0, 0x7b2
+  0x7b3025f3, // csrr a1, 0x7b3
+};
+
+static uint32_t prog_put16[8] = {
+  0x7b251073, // csrw 0x7B2, a0
+  0x7b359073, // csrw 0x7B3, a1
+  0xe0000537, // lui  a0, 0xE0000
+  0x0f852583, // lw   a1, 0x0F8(a0)
+  0x0f452503, // lw   a0, 0x0F4(a0)
+  0x00a59023, // sh   a0, 0x000(a1)
+  0x7b202573, // csrr a0, 0x7b2
+  0x7b3025f3, // csrr a1, 0x7b3
+};
+
+uint32_t SLDebugger::get_mem32(uint32_t addr) {
+  uint32_t data;
+  get_mem32(addr, &data);
+  return data;
+}
+
+void SLDebugger::get_mem32(uint32_t addr, void* data) {
   load_prog(prog_get32);
   put(ADDR_DATA0,   0xDEADBEEF);
   put(ADDR_DATA1,   addr);
@@ -135,21 +176,153 @@ void SLDebugger::get_mem32(uint32_t addr, void* data) {
 }
 
 void SLDebugger::put_mem32(uint32_t addr, void* data) {
-  static uint32_t prog_put32[8] = {
-    0x7b251073, // csrw 0x7b2,a0
-    0x7b359073, // csrw 0x7b3,a1
-    0xe0000537, // lui  a0,0xe0000
-    0x0f852583, // lw   a1,248(a0)
-    0x0f452503, // lw   a0,244(a0)
-    0x00a5a023, // sw   a0,0(a1)
-    0x7b202573, // csrr a0,0x7b2
-    0x7b3025f3, // csrr a1,0x7b3
-  };
-
   load_prog(prog_put32);
   put(ADDR_DATA0,   *(uint32_t*)data);
   put(ADDR_DATA1,   addr);
   put(ADDR_COMMAND, cmd_runprog);
+}
+
+void SLDebugger::put_mem32(uint32_t addr, uint32_t data) {
+  load_prog(prog_put32);
+  put(ADDR_DATA0,   data);
+  put(ADDR_DATA1,   addr);
+  put(ADDR_COMMAND, cmd_runprog);
+}
+
+void SLDebugger::put_mem16(uint32_t addr, uint16_t data) {
+  load_prog(prog_put16);
+  put(ADDR_DATA0,   data);
+  put(ADDR_DATA1,   addr);
+  put(ADDR_COMMAND, cmd_runprog);
+}
+
+//-----------------------------------------------------------------------------
+
+static uint32_t prog_getblock32[8] = {
+  0xe0000537, // lui    a0, 0xE0000
+  0x0f852583, // lw     a1, 0x0F8(a0) // data0 = *data1;
+  0x0005a583, // lw     a1, 0x000(a1)
+  0x0eb52a23, // sw     a1, 0x0F4(a0)
+  0x0f852583, // lw     a1, 0x0F8(a0) // data1 += 4
+  0x00458593, // addi   a1, a1, 4
+  0x0eb52c23, // sw     a1, 0x0F8(a0)
+  0x00100073, // ebreak
+};
+
+static uint32_t prog_putblock32[8] = {
+  0xe0000537, // lui    a0, 0xE0000
+  0x0f852583, // lw     a1, 0x0F8(a0)
+  0x0f452503, // lw     a0, 0x0F4(a0)
+  0x00a5a023, // sw     a0, a1
+  0x00458593, // addi   a1, a1, 4
+  0xe0000537, // lui    a0, 0xE0000
+  0x0eb52c23, // sw     a1, 0xF8(a0)
+  0x00100073, // ebreak
+};
+
+void SLDebugger::get_block32(uint32_t addr, void* data, int size_dwords) {
+  uint32_t* cursor = (uint32_t*)data;
+  uint32_t a0 = get_gpr(10);
+  uint32_t a1 = get_gpr(11);
+
+  load_prog(prog_getblock32);
+  put(ADDR_DATA1,   addr);
+  put(ADDR_AUTOCMD, 0x00000001);
+  put(ADDR_COMMAND, cmd_runprog);
+  for (int i = 0; i < size_dwords; i++) {
+    get(ADDR_DATA0, cursor++);
+  }
+
+  put(ADDR_AUTOCMD, 0x00000000);
+  put_gpr(10, a0);
+  put_gpr(11, a1);
+}
+
+void SLDebugger::put_block32(uint32_t addr, void* data, int size_dwords) {
+  uint32_t* cursor = (uint32_t*)data;
+  uint32_t a0 = get_gpr(10);
+  uint32_t a1 = get_gpr(11);
+
+  load_prog(prog_putblock32);
+  put(ADDR_DATA0, *cursor++);
+  put(ADDR_DATA1, addr);
+  put(ADDR_AUTOCMD, 0x00000001);
+  put(ADDR_COMMAND, cmd_runprog);
+  for (int i = 0; i < size_dwords - 1; i++) {
+    put(ADDR_DATA0, *cursor++);
+  }
+
+  put(ADDR_AUTOCMD, 0x00000000);
+  put_gpr(10, a0);
+  put_gpr(11, a1);
+}
+
+//-----------------------------------------------------------------------------
+
+bool SLDebugger::is_flash_locked() {
+  // seems to work
+  uint32_t c = get_mem32(ADDR_FLASH_CTLR);
+  return c & (1 << 7);
+}
+
+void SLDebugger::unlock_flash() {
+  // seems to work
+  put_mem32(ADDR_FLASH_KEYR, 0x45670123);
+  put_mem32(ADDR_FLASH_KEYR, 0xCDEF89AB);
+}
+
+void SLDebugger::lock_flash() {
+  // seems to work
+  uint32_t c = get_mem32(ADDR_FLASH_CTLR);
+  put_mem32(ADDR_FLASH_CTLR, c | (1 << 7));
+}
+
+//-----------------------------------------------------------------------------
+
+void SLDebugger::erase_flash_page(int addr) {
+  Reg_FLASH_CTLR c;
+  get_mem32(ADDR_FLASH_CTLR, &c);
+  c.PER = 1;
+  put_mem32(ADDR_FLASH_CTLR, &c);
+  put_mem32(ADDR_FLASH_ADDR, addr);
+  c.STRT = 1;
+  put_mem32(ADDR_FLASH_CTLR, &c);
+
+  while (1) {
+    Reg_FLASH_STATR s;
+    get_mem32(ADDR_FLASH_STATR, &s);
+    if (!s.BUSY) break;
+  }
+
+  c.PER = 0;
+  c.STRT = 0;
+  put_mem32(ADDR_FLASH_CTLR, &c);
+}
+
+//-----------------------------------------------------------------------------
+// works, don't forget to halt and unlock first
+
+void SLDebugger::write_flash_word(int addr, uint16_t data) {
+
+  // enable flash programming
+  Reg_FLASH_CTLR c;
+  get_mem32(ADDR_FLASH_CTLR, &c);
+  c.PG = 1;
+  put_mem32(ADDR_FLASH_CTLR, &c);
+
+  // write flash
+  put_mem16(addr, data);
+
+  // wait until not busy
+  while (1) {
+    Reg_FLASH_STATR s;
+    get_mem32(ADDR_FLASH_STATR, &s);
+    if (!s.BUSY) break;
+  }
+
+  // disable flash programming
+  c.PG = 0;
+  put_mem32(ADDR_FLASH_CTLR, &c);
 }
 
 //-----------------------------------------------------------------------------
@@ -179,11 +352,8 @@ uint32_t SLDebugger::get_gpr(int index) const {
   cmd.AARSIZE    = 2;
   cmd.CMDTYPE    = 0;
 
-  put(ADDR_DATA0, 0xDEADBEEF);
-  put(ADDR_COMMAND, cmd.raw);
-  while(get_abstatus().BUSY);
-
   uint32_t result = 0;
+  put(ADDR_COMMAND, cmd.raw);
   get(ADDR_DATA0, &result);
   return result;
 }
@@ -200,14 +370,12 @@ void SLDebugger::put_gpr(int index, uint32_t gpr) {
 
   put(ADDR_DATA0,   gpr);
   put(ADDR_COMMAND, cmd.raw);
-  while(get_abstatus().BUSY);
 }
 
 //-----------------------------------------------------------------------------
 
-uint32_t SLDebugger::get_csr(int index) const {
+void SLDebugger::get_csr(int index, void* data) const {
   Reg_COMMAND cmd = {0};
-
   cmd.REGNO      = index;
   cmd.WRITE      = 0;
   cmd.TRANSFER   = 1;
@@ -216,13 +384,8 @@ uint32_t SLDebugger::get_csr(int index) const {
   cmd.AARSIZE    = 2;
   cmd.CMDTYPE    = 0;
 
-  //put(ADDR_DATA0, 0x00000000);
   put(ADDR_COMMAND, cmd.raw);
-  while(get_abstatus().BUSY);
-
-  uint32_t result = 0;
-  get(ADDR_DATA0, &result);
-  return result;
+  get(ADDR_DATA0, data);
 }
 
 //------------------------------------------------------------------------------
@@ -243,94 +406,32 @@ void SLDebugger::load_regs() {
 
 //-----------------------------------------------------------------------------
 
-#if 0
-
-void SingleLineReadMEMDirectBlock(uint32_t addr, uint16_t *psize,
-                                     uint32_t *pdbuf) {
-  uint32_t const *p32;
-  uint8_t i;
-  uint16_t len = *psize - 1;
-
-  DWordSend(DEG_Abst_DATA1, addr);
-  if (len == 0) {
-    p32 = CH32V003_R_32bit;
-    for (i = 0; i < 8; i++) DWordSend(DEG_Prog_BUF0 + (i << 1), *p32++);
-    DWordSend(DEG_Abst_CMD, (1 << 18)); /* execute pro buf */
-    // SingleLineCheckAbstSTA();
-    DWordRecv(DEG_Abst_DATA0, pdbuf);
-  } else {
-    DWordSend(DEG_Abst_CMDAUTO, 0x00000001);
-    p32 = CH32V003_R_W_blk;
-    for (i = 0; i < 8; i++) DWordSend(DEG_Prog_BUF0 + (i << 1), *p32++);
-    DWordSend(DEG_Abst_CMD, (1 << 18)); /* execute pro buf */
-    BlockRecv(DEG_Abst_DATA0, pdbuf, len);
-    *psize = len;
-    DWordSend(DEG_Abst_CMDAUTO, 0x00000000);
-    // SingleLineCheckAbstSTA();
-    DWordRecv(DEG_Abst_DATA0, pdbuf + len);
-    *psize = len + 1;
-  }
+void SLDebugger::step() {
+  Reg_DCSR dcsr = get_dcsr();
+  dcsr.STEP = 1;
+  put_gpr(0x7B0, dcsr.raw);
+  put(ADDR_DMCONTROL, 0x40000001);
+  while (get_dmstatus().ANYHALTED);
+  put(ADDR_DMCONTROL, 0x80000001);
+  while (!get_dmstatus().ALLHALTED);
 }
 
-void SLDebugger::get_mem_block(uint32_t base, int size_bytes, void* out) {
-  int size_dwords = size_bytes >> 2;
-  if (size_dwords == 0) return;
+//-----------------------------------------------------------------------------
 
-  // Block read prog from  1line_base
-  static uint32_t prog_block32[8] = {
-    0xe0000537, 0x0f450513, 0xf693414c, 0x8563ffc5,
-    0x411000d5, 0xa019c290, 0xc1104290, 0xc14c0591
-  };
-
-  load_prog(prog_block32);
-
-  put(ADDR_DATA1, base);
-  put(ADDR_AUTOCMD, 0x00000001);  // every time we read DATA0 run the command again
-  put(ADDR_COMMAND, cmd_runprog);
-
-  uint32_t* cursor = (uint32_t*)out;
-
-  for (int i = 0; i < size_dwords - 1; i++) {
-    /*
-    DIO_OUT();
-    Pulse(4);
-    Put8(addr);
-    for (int i = 0; i < ndwords; i++) {
-      datbuf[i] = DataBitRecv32();
-      // Restore bus high
-      DIO_OUT();
-      SWDIO_Out_1();
-      if (i < ndwords-1) Pulse(42); // why 42 for inter-block start bit?
-    }
-    DIO_IN();
-    delay(162);
-    */
-  }
-
-  put(ADDR_AUTOCMD, 0x00000000);
-  get(ADDR_DATA0,   cursor++);
-}
-#endif
-
-
-//------------------------------------------------------------------------------
-
-bool test_mem(SLDebugger& sl) {
+bool SLDebugger::test_mem() {
   uint32_t base = 0x20000000;
   int size_dwords = 512;
 
   uint32_t addr;
-  uint32_t data;
   for (int i = 0; i < size_dwords; i++) {
     addr = base + (4 * i);
-    data = 0xBEEF0000 + i;
-    sl.put_mem32(addr, &data);
+    put_mem32(addr, 0xBEEF0000 + i);
   }
   bool fail = false;
   for (int i = 0; i < size_dwords; i++) {
     addr = base + (4 * i);
-    data = 0xDEADBEEF;
-    sl.get_mem32(addr, &data);
+    uint32_t data = 0xDEADBEEF;
+    get_mem32(addr, &data);
     if (data != 0xBEEF0000 + i) {
       printf("Memory test fail at 0x%08x : expected 0x%08x, got 0x%08x\n", addr, 0xBEEF0000 + i, data);
       fail = true;
@@ -338,7 +439,7 @@ bool test_mem(SLDebugger& sl) {
   }
 
   Reg_ABSTRACTCS reg_abstractcs;
-  sl.get(ADDR_ABSTRACTCS, &reg_abstractcs);
+  get(ADDR_ABSTRACTCS, &reg_abstractcs);
   if (reg_abstractcs.CMDER) {
     printf("Memory test fail, CMDER=%d\n", reg_abstractcs.CMDER);
     fail = true;
@@ -348,6 +449,7 @@ bool test_mem(SLDebugger& sl) {
   return fail;
 }
 
+//-----------------------------------------------------------------------------
 
 #if 0
     uint32_t part0, part1, part2, part3, part4;
@@ -435,3 +537,12 @@ bool test_mem(SLDebugger& sl) {
     printf("reg_hartinfo\n");   reg_hartinfo.dump();   printf("\n");
     printf("reg_haltsum0\n");   reg_haltsum0.dump();   printf("\n");
 #endif
+
+/*
+void SLDebugger::get_dcsr() {
+  //0x7B0 DRW dcsr Debug control and status register.
+  //0x7B1 DRW dpc Debug PC.
+  //0x7B2 DRW dscratch Debug scratch register
+  // 0x002307b0
+}
+*/

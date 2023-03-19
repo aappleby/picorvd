@@ -42,6 +42,19 @@ const uint8_t ADDR_PART         = 0x7F; // not in doc but appears to be part inf
 
 //------------------------------------------------------------------------------
 
+const uint32_t ADDR_FLASH_ACTLR = 0x40022000;
+const uint32_t ADDR_FLASH_KEYR = 0x40022004;
+const uint32_t ADDR_FLASH_OBKEYR = 0x40022008;
+const uint32_t ADDR_FLASH_STATR = 0x4002200C;
+const uint32_t ADDR_FLASH_CTLR = 0x40022010;
+const uint32_t ADDR_FLASH_ADDR = 0x40022014;
+const uint32_t ADDR_FLASH_OBR = 0x4002201C;
+const uint32_t ADDR_FLASH_WPR = 0x40022020;
+const uint32_t ADDR_FLASH_MODEKEYR = 0x40022024;
+const uint32_t ADDR_FLASH_BOOT_MODEKEYR = 0x40022028;
+
+//------------------------------------------------------------------------------
+
 struct Reg_CPBR {
   union {
     struct {
@@ -138,7 +151,7 @@ static_assert(sizeof(Reg_SHDWCFGR) == 4);
 
 //------------------------------------------------------------------------------
 
-struct Reg_DMCTRL {
+struct Reg_DMCONTROL {
   union {
     struct {
       uint32_t DMACTIVE     : 1;
@@ -161,7 +174,7 @@ struct Reg_DMCTRL {
     printf("  HALTREQ       = %d\n", HALTREQ);
   }
 };
-static_assert(sizeof(Reg_DMCTRL) == 4);
+static_assert(sizeof(Reg_DMCONTROL) == 4);
 
 //------------------------------------------------------------------------------
 
@@ -188,7 +201,6 @@ struct Reg_DMSTATUS {
   };
 
   void dump() {
-    /*
     printf("  raw           = 0x%08x\n", raw);
     printf("  VERSION       = %d\n", VERSION       );
     printf("  AUTHENTICATED = %d\n", AUTHENTICATED );
@@ -202,7 +214,7 @@ struct Reg_DMSTATUS {
     printf("  ALLRESUMEACK  = %d\n", ALLRESUMEACK  );
     printf("  ANYHAVERESET  = %d\n", ANYHAVERESET  );
     printf("  ALLHAVERESET  = %d\n", ALLHAVERESET  );
-    */
+    /*
     printf("  ");
     if      (ALLHALTED)  printf("+halt ");
     else if (ANYHALTED)  printf("?halt ");
@@ -211,6 +223,7 @@ struct Reg_DMSTATUS {
     else if (ANYRUNNING) printf("?run ");
     else                 printf("!run ");
     printf("\n");
+    */
   }
 };
 static_assert(sizeof(Reg_DMSTATUS) == 4);
@@ -374,6 +387,147 @@ static_assert(sizeof(Reg_DCSR) == 4);
 
 //------------------------------------------------------------------------------
 
+struct Reg_DBGMCU_CR {
+  union {
+    struct {
+      uint32_t IWDG_STOP : 1;
+      uint32_t WWDG_STOP : 1;
+      uint32_t PAD0      : 2;
+      uint32_t TIM1_STOP : 1;
+      uint32_t TIM2_STOP : 1;
+      uint32_t PAD1      : 26;
+    };
+    uint32_t raw;
+  };
+};
+static_assert(sizeof(Reg_DBGMCU_CR) == 4);
+
+//------------------------------------------------------------------------------
+
+struct Reg_FLASH_ACTLR {
+  union {
+    struct {
+      uint32_t LATENCY : 2;
+      uint32_t PAD0    : 30;
+    };
+    uint32_t raw;
+  };
+};
+static_assert(sizeof(Reg_FLASH_ACTLR) == 4);
+
+//------------------------------------------------------------------------------
+
+struct Reg_FLASH_STATR {
+  union {
+    struct {
+      uint32_t BUSY      : 1; // True if flash busy
+      uint32_t PAD0      : 3;
+      uint32_t WRPRTERR  : 1; // True if the flash was written while locked
+      uint32_t EOP       : 1; // True if flash finished programming
+      uint32_t PAD1      : 8;
+      uint32_t MODE      : 1; // Something to do with boot area flash?
+      uint32_t BOOT_LOCK : 1; // True if boot flash locked
+      uint32_t PAD2      : 16;
+    };
+    uint32_t raw;
+  };
+
+  void dump() {
+    //printf("  raw           = 0x%08x\n", raw);
+    printf("  BUSY        = %d\n", BUSY     );
+    printf("  WRPRTERR    = %d\n", WRPRTERR );
+    printf("  EOP         = %d\n", EOP      );
+    printf("  MODE        = %d\n", MODE     );
+    printf("  BOOT_LOCK   = %d\n", BOOT_LOCK);
+  }
+};
+static_assert(sizeof(Reg_FLASH_STATR) == 4);
+
+//------------------------------------------------------------------------------
+
+struct Reg_FLASH_CTLR {
+  union {
+    struct {
+      uint32_t PG      : 1; // Program enable
+      uint32_t PER     : 1; // Perform sector erase
+      uint32_t MER     : 1; // Perform full erase
+      uint32_t PAD0    : 1;
+      uint32_t OBG     : 1; // Perform user-selected word programming
+      uint32_t OBER    : 1; // Perform user-selected word erasure
+      uint32_t STRT    : 1; // Start
+      uint32_t LOCK    : 1; // Flash lock status
+
+      uint32_t PAD1    : 1;
+      uint32_t OBWRE   : 1; // User-selected word write enable
+      uint32_t ERRIE   : 1; // Error status interrupt control
+      uint32_t PAD2    : 1;
+      uint32_t EOPIE   : 1; // EOP interrupt control
+      uint32_t PAD3    : 2;
+      uint32_t FLOCK   : 1; // Fast programming mode lock
+
+      uint32_t FTPG    : 1; // Fast page programming?
+      uint32_t FTER    : 1; // Fast erase
+      uint32_t BUFLOAD : 1; // "Cache data into BUF"
+      uint32_t BUFRST  : 1; // "BUF reset operation"
+      uint32_t PAD4    : 12;
+    };
+    uint32_t raw;
+  };
+
+  void dump() {
+    printf("  PG          = %d\n", PG      );
+    printf("  PER         = %d\n", PER     );
+    printf("  MER         = %d\n", MER     );
+    printf("  OBG         = %d\n", OBG     );
+    printf("  OBER        = %d\n", OBER    );
+    printf("  STRT        = %d\n", STRT    );
+    printf("  LOCK        = %d\n", LOCK    );
+    printf("  OBWRE       = %d\n", OBWRE   );
+    printf("  ERRIE       = %d\n", ERRIE   );
+    printf("  EOPIE       = %d\n", EOPIE   );
+    printf("  FLOCK       = %d\n", FLOCK   );
+    printf("  FTPG        = %d\n", FTPG    );
+    printf("  FTER        = %d\n", FTER    );
+    printf("  BUFLOAD     = %d\n", BUFLOAD );
+    printf("  BUFRST      = %d\n", BUFRST  );
+  }
+};
+static_assert(sizeof(Reg_FLASH_CTLR) == 4);
+
+//------------------------------------------------------------------------------
+
+struct Reg_FLASH_OBR {
+  union {
+    struct {
+      uint32_t OBERR       : 1; // Unlock OB error
+      uint32_t RDPRT       : 1; // Flash read protect flag
+      uint32_t IWDG_SW     : 1; // Independent watchdog enable
+      uint32_t PAD0        : 1;
+      uint32_t STANDBY_RST : 1; // "System reset control in Standby mode"
+      uint32_t CFGRSTT     : 2; // "Configuration word reset delay time"
+      uint32_t PAD1        : 3;
+      uint32_t DATA0       : 8; // "Data byte 0"
+      uint32_t DATA1       : 8; // "Data byte 1"
+      uint32_t PAD2        : 6;
+    };
+    uint32_t raw;
+  };
+
+  void dump() {
+    printf("  OBERR       = %d\n", OBERR       );
+    printf("  RDPRT       = %d\n", RDPRT       );
+    printf("  IWDG_SW     = %d\n", IWDG_SW     );
+    printf("  STANDBY_RST = %d\n", STANDBY_RST );
+    printf("  CFGRSTT     = %d\n", CFGRSTT     );
+    printf("  DATA0       = %d\n", DATA0       );
+    printf("  DATA1       = %d\n", DATA1       );
+  }
+
+};
+static_assert(sizeof(Reg_FLASH_OBR) == 4);
+
+//------------------------------------------------------------------------------
+
 struct SLDebugger {
   void init(int swd_pin);
   void reset();
@@ -381,17 +535,42 @@ struct SLDebugger {
   void get(uint8_t addr, void* out) const;
   void put(uint8_t addr, uint32_t data) const;
 
-  void get_mem32(uint32_t addr, void* data);
-  void put_mem32(uint32_t addr, void* data);
+  uint32_t get_mem32(uint32_t addr);
+  void     put_mem32(uint32_t addr, uint32_t data);
+
+  void     get_mem32(uint32_t addr, void* data);
+  void     put_mem32(uint32_t addr, void* data);
+
+  void put_mem16(uint32_t addr, uint16_t data);
+
+  void get_block32(uint32_t addr, void* data, int size_dwords);
+  void put_block32(uint32_t addr, void* data, int size_dwords);
 
   uint32_t get_gpr(int index) const;
   void     put_gpr(int index, uint32_t gpr);
 
-  uint32_t get_csr(int index) const;
+  void     get_csr(int index, void* data) const;
+
+  Reg_DCSR get_dcsr() const { Reg_DCSR r; get_csr(0x7B0, &r); return r; }
+  uint32_t get_dpc() const  { uint32_t r; get_csr(0x7B1, &r); return r; }
+  uint32_t get_ds0() const  { uint32_t r; get_csr(0x7B2, &r); return r; }
+  uint32_t get_ds1() const  { uint32_t r; get_csr(0x7B3, &r); return r; }
+
+  bool is_flash_locked();
+  void unlock_flash();
+  void lock_flash();
+  void erase_flash_page(int addr);
+  void write_flash_word(int addr, uint16_t data);
+
+  bool test_mem();
+
+  void step();
 
   void halt();
   void unhalt();
   void stop_watchdogs();
+
+  void reset_cpu();
 
   const Reg_DMSTATUS   get_dmstatus() const;
   const Reg_ABSTRACTCS get_abstatus() const;
