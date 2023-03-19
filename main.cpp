@@ -271,14 +271,11 @@ int main() {
   sleep_ms(100);
 #endif
 
+  static int rep = 0;
   while(1) {
-    static int rep = 0;
-    printf("Hello World usb %d\r\n", rep++);
-    
-    char buf[256];
-    sprintf(buf, "Hello World uart %d\r\n", rep);
-    uart_puts(uart0, buf);
-
+    usb_printf("Hello World usb %d\n", rep);
+    ser_printf("Hello World ser %d\n", rep);
+    rep++;
     sleep_ms(100);
   }
 
