@@ -423,6 +423,12 @@ int main() {
       sl.put(ADDR_DMCONTROL, 0x00000001);
     }
 
+    if (strcmp(command, "halt") == 0) {
+      put(ADDR_DMCONTROL, 0x80000001);
+      while (!get_dmstatus().ALLHALTED);
+      put(ADDR_DMCONTROL, 0x00000001);
+    }
+
     {
       int err = sl.get_abstatus().CMDER;
       if (err) {
