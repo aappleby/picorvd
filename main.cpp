@@ -409,6 +409,13 @@ int main() {
     if (strcmp(command, "wipe_chip") == 0)  on_wipe_chip(sl);
     if (strcmp(command, "write_page") == 0) on_write_page(sl, 0x08000200, nullptr);
 
+    {
+      int err = sl.get_abstatus().CMDER;
+      if (err) {
+        printf("CMDERR = %d\n", err);
+      }
+    }
+
     uint32_t time_b = time_us_32();
     usb_printf("Command took %d us\n", time_b - time_a);
 
