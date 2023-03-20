@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../pico-sdk"
+		},
+		{
+			"path": "../pico-examples"
+		}
+	],
+  "settings": {
+    "files.associations": {
+      "*.pio": "c",
+      "*.inc": "cpp"
+    }
+  }
+}
