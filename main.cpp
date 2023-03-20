@@ -156,14 +156,33 @@ void on_wipe_chip(SLDebugger& sl) {
   sl.put_gpr(12, BIT_CTLR_MER);
   sl.put_gpr(13, BIT_CTLR_MER | BIT_CTLR_STRT);
   sl.put(ADDR_COMMAND, 0x00040000);
-
-  while (!sl.get_dmstatus().ALLHALTED);
+  while(sl.get_abstatus().BUSY);
 
   sl.lock_flash();
   sl.unhalt();
 
   ser_printf("on_wipe_chip() done\n");
 }
+
+/*
+> write_page
+Command took 150523 us
+> write_page
+Command took 111231 us
+> write_page
+Command took 111209 us
+> 
+
+Command took 184551 us
+> 
+Command took 4 us
+> write_page
+Command took 117198 us
+> write_page
+Command took 117121 us
+> 
+
+*/
 
 //------------------------------------------------------------------------------
 
@@ -190,11 +209,11 @@ uint16_t prog_write_incremental[16] = {
   0x8805, // andi    s0,s0,1
   0xfc75, // bnez    s0,16a <waitloop2>
 
-  // update address
-  0xc950, // sw      a2,20(a0)
-
   // reset buffer
   0xc91c, // sw      a5,16(a0)
+
+  // update address
+  0xc950, // sw      a2,20(a0)
 };
 
 void on_write_page(SLDebugger& sl) {
@@ -203,42 +222,10 @@ void on_write_page(SLDebugger& sl) {
   sl.halt();
   sl.unlock_flash();
 
-#if 0
-  sl.put_mem32(ADDR_FLASH_CTLR, BIT_CTLR_FTPG | BIT_CTLR_BUFRST);
-  // while(flash.statr.BUSY); // This doesn't appear to be necessary?
-  sl.put_mem32(ADDR_FLASH_ADDR, 0x08000000);
-
-  // a0 = flash
-  // a1 = &data0
-  // a2 = addr to write
-  // a3 = BIT_CTLR_FTPG | BIT_CTLR_BUFLOAD
-  // a4 = BIT_CTLR_FTPG | BIT_CTLR_STRT
-  // a5 = temp
-
-  sl.load_prog((uint32_t*)prog_write_incremental);
-  sl.put_gpr(10, 0x40022000);
-  sl.put_gpr(11, 0xE00000F4);
-  sl.put_gpr(12, 0x08000000);
-  sl.put_gpr(12, BIT_CTLR_FTPG | BIT_CTLR_BUFLOAD);
-  sl.put_gpr(13, BIT_CTLR_FTPG | BIT_CTLR_STRT);
-  
-  sl.put(ADDR_AUTOCMD, 1);
-  sl.put(ADDR_DATA0,   0xBEEF0000);
-  sl.put(ADDR_COMMAND, 0x00040000);
-
-  for (int i = 1; i < 16; i++) {
-    sl.put(ADDR_DATA0, 0xBEEF0000 + i);
-  }
-
-  sl.put_mem32(ADDR_FLASH_CTLR, 0);
-#endif
-
   sl.put_mem32(ADDR_FLASH_ADDR, 0x08000000);
   sl.put_mem32(ADDR_FLASH_CTLR, BIT_CTLR_FTPG | BIT_CTLR_BUFRST);
-  sleep_ms(100);
 
   sl.load_prog((uint32_t*)prog_write_incremental);
-
   sl.put_gpr(10, 0x40022000);
   sl.put_gpr(11, 0xE00000F4);
   sl.put_gpr(12, 0x08000000);
@@ -246,11 +233,17 @@ void on_write_page(SLDebugger& sl) {
   sl.put_gpr(14, BIT_CTLR_FTPG | BIT_CTLR_STRT);
   sl.put_gpr(15, BIT_CTLR_FTPG | BIT_CTLR_BUFRST);
  
-  static int counter = 0;
-  for (int page = 0; page < 14; page++) {
+  sl.put(ADDR_AUTOCMD, 1);
+  bool first_word = true;
+
+  int counter = 0;
+  for (int page = 0; page < 3; page++) {
     for (int i = 0; i < 16; i++) {
       sl.put(ADDR_DATA0,   0xBEEF0000 + counter++);
-      sl.put(ADDR_COMMAND, 0x00040000);
+      if (first_word) {
+        sl.put(ADDR_COMMAND, 0x00040000);
+        first_word = false;
+      }
     }
     while(sl.get_abstatus().BUSY);
   }
@@ -408,12 +401,16 @@ int main() {
       }
     }
 
+    uint32_t time_a = time_us_32();
+
     if (strcmp(command, "halt") == 0)       on_halt(sl);
     if (strcmp(command, "status") == 0)     on_status(sl);
     if (strcmp(command, "dump_flash") == 0) on_dump_flash(sl);
     if (strcmp(command, "wipe_chip") == 0)  on_wipe_chip(sl);
     if (strcmp(command, "write_page") == 0) on_write_page(sl);
 
+    uint32_t time_b = time_us_32();
+    usb_printf("Command took %d us\n", time_b - time_a);
 
     //if (strcmp(command, "test1") == 0)      test_thingy(sl);
     //if (strcmp(command, "test2") == 0)      test_other_thingy(sl);
