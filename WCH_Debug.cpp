@@ -69,10 +69,26 @@ void SLDebugger::reset() {
 
   // Clear error status
   put(ADDR_ABSTRACTCS, 0x00000700);
+
+  // Halt CPU
+  put(ADDR_DMCONTROL, 0x80000001);
+  while (!get_dmstatus().ALLHALTED);
+  put(ADDR_DMCONTROL, 0x00000001);
+
+  // Stop watchdogs
+  put(ADDR_DATA0,     0x00000003);
+  put(ADDR_COMMAND,   0x002307C0);
+
+  // Unlock flash
+  put_mem32(ADDR_FLASH_KEYR, 0x45670123);
+  put_mem32(ADDR_FLASH_KEYR, 0xCDEF89AB);
+  put_mem32(ADDR_FLASH_MKEYR, 0x45670123);
+  put_mem32(ADDR_FLASH_MKEYR, 0xCDEF89AB);
 }
 
 //-----------------------------------------------------------------------------
 
+/*
 void SLDebugger::halt() {
   if (halt_count == 0) {
     put(ADDR_DMCONTROL, 0x80000001);
@@ -90,14 +106,17 @@ void SLDebugger::unhalt() {
     put(ADDR_DMCONTROL, 0x00000001);
   }
 }
+*/
 
 // Where did this come from?
 // It's from "Chapter 18 Debug Support (DBG)"
 // 0x7C0 is a CSR that controls watchdogs and timers in debug mode
+/*
 void SLDebugger::stop_watchdogs() {
   put(ADDR_DATA0,     0x00000003);
   put(ADDR_COMMAND,   0x002307C0);
 }
+*/
 
 void SLDebugger::reset_cpu() {
   // signal NDMRESET
@@ -265,6 +284,7 @@ void SLDebugger::put_block32(uint32_t addr, void* data, int size_dwords) {
 
 //-----------------------------------------------------------------------------
 
+/*
 bool SLDebugger::is_flash_locked() {
   // seems to work
   //uint32_t c = get_mem32(ADDR_FLASH_CTLR);
@@ -291,6 +311,7 @@ void SLDebugger::lock_flash() {
     put_mem32(ADDR_FLASH_CTLR, c | (1 << 7));
   }
 }
+*/
 
 //-----------------------------------------------------------------------------
 

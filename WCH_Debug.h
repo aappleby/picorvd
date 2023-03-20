@@ -574,11 +574,6 @@ struct SLDebugger {
   uint32_t get_ds0() const  { uint32_t r; get_csr(0x7B2, &r); return r; }
   uint32_t get_ds1() const  { uint32_t r; get_csr(0x7B3, &r); return r; }
 
-  int unlock_count = 0;
-  bool is_flash_locked();
-  void lock_flash();
-  void unlock_flash();
-
   void erase_flash_page(int addr);
   void write_flash_word(int addr, uint16_t data);
 
@@ -588,8 +583,6 @@ struct SLDebugger {
 
   int halt_count = 0;
 
-  void halt();
-  void unhalt();
   void stop_watchdogs();
 
   void reset_cpu();

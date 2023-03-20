@@ -47,16 +47,6 @@ void mix(uint32_t& x) {
 
 //------------------------------------------------------------------------------
 
-void on_halt(SLDebugger& sl) {
-  sl.halt();
-}
-
-void on_unhalt(SLDebugger& sl) {
-  sl.unhalt();
-}
-
-//------------------------------------------------------------------------------
-
 void on_status(SLDebugger& sl) {
   ser_printf("on_status()\n");
 
@@ -74,8 +64,6 @@ void on_status(SLDebugger& sl) {
 
   //----------
 
-  sl.halt();
-
   sl.getp(ADDR_CPBR,       &reg_cpbr);
   sl.getp(ADDR_CFGR,       &reg_cfgr);
   sl.getp(ADDR_SHDWCFGR,   &reg_shdwcfgr);
@@ -87,8 +75,6 @@ void on_status(SLDebugger& sl) {
   sl.get_csr(0x7B1, &dpc);
   sl.get_csr(0x7B2, &ds0);
   sl.get_csr(0x7B3, &ds1);
-
-  sl.unhalt();
 
   //----------
 
@@ -142,9 +128,6 @@ void do_flash_thing(volatile Reg_FLASH& flash, void* addr, uint32_t c1, uint32_t
 void on_wipe_chip(SLDebugger& sl) {
   ser_printf("on_wipe_chip()\n");
 
-  sl.halt();
-  sl.unlock_flash();
-
   // a0 = flash
   // a1 = addr
   // a2 = BIT_CTLR_MER
@@ -157,9 +140,6 @@ void on_wipe_chip(SLDebugger& sl) {
   sl.put_gpr(13, BIT_CTLR_MER | BIT_CTLR_STRT);
   sl.put(ADDR_COMMAND, 0x00040000);
   while(sl.get_abstatus().BUSY);
-
-  sl.lock_flash();
-  sl.unhalt();
 
   ser_printf("on_wipe_chip() done\n");
 }
@@ -219,9 +199,6 @@ uint16_t prog_write_incremental[16] = {
 void on_write_page(SLDebugger& sl, uint32_t dst_addr, uint32_t* data) {
   ser_printf("on_write_page()\n");
 
-  sl.halt();
-  sl.unlock_flash();
-
   sl.put_mem32(ADDR_FLASH_ADDR, dst_addr);
   sl.put_mem32(ADDR_FLASH_CTLR, BIT_CTLR_FTPG | BIT_CTLR_BUFRST);
 
@@ -250,58 +227,7 @@ void on_write_page(SLDebugger& sl, uint32_t dst_addr, uint32_t* data) {
 
   sl.put_mem32(ADDR_FLASH_CTLR, 0);
 
-  sl.lock_flash();
-  sl.unhalt();
-
   ser_printf("on_write_page() done\n");
-}
-
-//------------------------------------------------------------------------------
-
-void test_thingy(SLDebugger& sl) {
-  usb_printf("testing thingy\n");
-
-  sl.halt();
-  bool lock1 = sl.is_flash_locked();
-  sl.unlock_flash();
-  bool lock2 = sl.is_flash_locked();
-  sl.lock_flash();
-  bool lock3 = sl.is_flash_locked();
-  sl.unhalt();
-
-  usb_printf("l1 %d l2 %d l3 %d\n", lock1, lock2, lock3);
-}
-
-//------------------------------------------------------------------------------
-
-void test_other_thingy(SLDebugger& sl) {
-  usb_printf("testing other thingy\n");
-
-  uint32_t temp[32] = {0};
-
-  sl.halt();
-
-  sl.put_mem32(0x20000800 - 16, 0x5AA55AA5);
-  sl.put_mem32(0x20000800 - 12, 0x5AA55AA5);
-  sl.put_mem32(0x20000800 -  8, 0x5AA55AA5);
-  sl.put_mem32(0x20000800 -  4, 0x5AA55AA5);
-
-  temp[0] = 0xDEAD0001;
-  temp[1] = 0xDEAD0002;
-  temp[2] = 0xDEAD0003;
-  temp[3] = 0xDEAD0004;
-
-  sl.put_block32(0x20000800 - 16, temp, 4);
-
-  for (int i = 0; i < 4; i++) temp[i] = 0;
-
-  sl.get_block32(0x20000800 - 16, temp, 4);
-
-  sl.unhalt();
-
-  for (int i = 0; i < 4; i++) {
-    usb_printf("temp[%d] = 0x%08x\n", i, temp[i]);
-  }
 }
 
 //------------------------------------------------------------------------------
@@ -309,10 +235,7 @@ void test_other_thingy(SLDebugger& sl) {
 void dump_ram(SLDebugger& sl) {
   uint32_t temp[512];
 
-  sl.halt();
-  sl.stop_watchdogs();
   sl.get_block32(0x20000000, temp, 512);
-  sl.unhalt();
 
   for (int y = 0; y < 32; y++) {
     for (int x = 0; x < 16; x++) {
@@ -330,13 +253,11 @@ void on_dump_flash(SLDebugger& sl) {
   Reg_FLASH_OBR o;
   uint32_t flash_wpr = 0;
 
-  sl.halt();
   sl.get_mem32p(ADDR_FLASH_WPR, &flash_wpr);
   sl.get_mem32p(ADDR_FLASH_STATR, &s);
   sl.get_mem32p(ADDR_FLASH_CTLR, &c);
   sl.get_mem32p(ADDR_FLASH_OBR, &o);
   sl.get_block32(0x08000000, temp, 256);
-  sl.unhalt();
 
   usb_printf("flash_wpr 0x%08x\n", flash_wpr);
   usb_printf("Reg_FLASH_STATR\n");
@@ -371,7 +292,6 @@ int main() {
   SLDebugger sl;
   sl.init(SWD_PIN);
   sl.reset();
-  sl.halt();
 
   char command[256] = {0};
   uint8_t cursor = 0;
@@ -403,7 +323,6 @@ int main() {
 
     uint32_t time_a = time_us_32();
 
-    if (strcmp(command, "halt") == 0)       on_halt(sl);
     if (strcmp(command, "status") == 0)     on_status(sl);
     if (strcmp(command, "dump_flash") == 0) on_dump_flash(sl);
     if (strcmp(command, "wipe_chip") == 0)  on_wipe_chip(sl);
