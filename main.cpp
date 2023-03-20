@@ -216,7 +216,7 @@ uint16_t prog_write_incremental[16] = {
   0xc950, // sw      a2,20(a0)
 };
 
-void on_write_page(SLDebugger& sl, uint32_t dst_addr) {
+void on_write_page(SLDebugger& sl, uint32_t dst_addr, uint32_t* data) {
   ser_printf("on_write_page()\n");
 
   sl.halt();
@@ -407,7 +407,7 @@ int main() {
     if (strcmp(command, "status") == 0)     on_status(sl);
     if (strcmp(command, "dump_flash") == 0) on_dump_flash(sl);
     if (strcmp(command, "wipe_chip") == 0)  on_wipe_chip(sl);
-    if (strcmp(command, "write_page") == 0) on_write_page(sl, 0x08000000);
+    if (strcmp(command, "write_page") == 0) on_write_page(sl, 0x08000200, nullptr);
 
     uint32_t time_b = time_us_32();
     usb_printf("Command took %d us\n", time_b - time_a);
