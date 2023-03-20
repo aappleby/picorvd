@@ -63,8 +63,7 @@ void SLDebugger::reset() {
   put(ADDR_SHDWCFGR, 0x5AA50400);
   put(ADDR_CFGR,     0x5AA50400);
 
-  // Turn debug module on
-
+  // Turn debug module on and clear ACKHAVERESET
   put(ADDR_DMCONTROL, 0x10000001);
 
   // Clear error status

@@ -169,37 +169,12 @@ Command took 117121 us
 
 
 uint16_t prog_write_incremental[16] = {
-
-#if 0
-  0x4180, // lw      s0,0(a1)
-  0xc200, // sw      s0,0(a2)
-  0xc914, // sw      a3,16(a0)
-
-  0x0611, // addi    a2,a2,4
-  0x7413, // andi    s0,a2,63
-  0x03f6, // andi    s0,a2,63
-  0xe811, // bnez    s0,174 <end>
-
-  0xc918, // sw      a4,16(a0)
-  0x4540, // lw      s0,12(a0)
-  0x8805, // andi    s0,s0,1
-  0xfc75, // bnez    s0,164 <waitloop2>
-
-  0xc950, // sw      a2,20(a0)
-  0xc91c, // sw      a5,16(a0)
-  0x4540, // lw      s0,12(a0)
-  0x8805, // andi    s0,s0,1
-  0xfc75, // bnez    s0,16e <waitloop1>
-#endif
-
-
-#if 1
   // copy word and trigger BUFLOAD
   0x4180, // lw      s0,0(a1)
   0xc200, // sw      s0,0(a2)
   0xc914, // sw      a3,16(a0)
 
-  // wait for ack
+  // wait for ack - this seems to be required now....?
   0x4540, // lw      s0,12(a0)
   0x8805, // andi    s0,s0,1
   0xfc75, // bnez    s0,15a <waitloop1>
@@ -221,7 +196,6 @@ uint16_t prog_write_incremental[16] = {
 
   // update address
   0xc950, // sw      a2,20(a0)
-#endif
 };
 
 void on_write_page(SLDebugger& sl, uint32_t dst_addr, uint32_t* data, int size_dwords) {
@@ -241,22 +215,22 @@ void on_write_page(SLDebugger& sl, uint32_t dst_addr, uint32_t* data, int size_d
   bool first_word = true;
 
   int page_count = (size_dwords + 15) / 16;
+  //page_count = 256; // write all flash
 
   int counter = 0;
   for (int page = 0; page < page_count; page++) {
     for (int i = 0; i < 16; i++) {
-      //while(sl.get_abstatus().BUSY);
       int index = page * 16 + i;
-      sl.put(ADDR_DATA0, index < size_dwords ? data[page * 16 + i] : 0);
-      //while(sl.get_abstatus().BUSY);
+      sl.put(ADDR_DATA0, index < size_dwords ? data[page * 16 + i] : 0xDEADBEEF);
       if (first_word) {
         // There's a chip bug here - we can't set AUTOCMD before COMMAND or things break all weird
         sl.put(ADDR_COMMAND, 0x00040000);
         sl.put(ADDR_AUTOCMD, 0x00000001);
         first_word = false;
       }
-      while(sl.get_abstatus().BUSY);
     }
+    // Wait for write to complete after each page.
+    while(sl.get_abstatus().BUSY);
   }
 
   sl.put_mem32(ADDR_FLASH_CTLR, 0);
@@ -424,9 +398,15 @@ int main() {
     }
 
     if (strcmp(command, "halt") == 0) {
-      put(ADDR_DMCONTROL, 0x80000001);
-      while (!get_dmstatus().ALLHALTED);
-      put(ADDR_DMCONTROL, 0x00000001);
+      sl.put(ADDR_DMCONTROL, 0x80000001);
+      while (!sl.get_dmstatus().ALLHALTED);
+      sl.put(ADDR_DMCONTROL, 0x00000001);
+
+      // Unlock flash
+      sl.put_mem32(ADDR_FLASH_KEYR, 0x45670123);
+      sl.put_mem32(ADDR_FLASH_KEYR, 0xCDEF89AB);
+      sl.put_mem32(ADDR_FLASH_MKEYR, 0x45670123);
+      sl.put_mem32(ADDR_FLASH_MKEYR, 0xCDEF89AB);
     }
 
     {
