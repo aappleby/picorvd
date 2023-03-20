@@ -168,44 +168,33 @@ void on_wipe_chip(SLDebugger& sl) {
 //------------------------------------------------------------------------------
 
 uint16_t prog_write_incremental[16] = {
-  /*
-  0x419c, // lw      a5,0(a1)
-  0xc21c, // sw      a5,0(a2)
+  // copy word and trigger BUFLOAD
+  0x4180, // lw      s0,0(a1)
+  0xc200, // sw      s0,0(a2)
   0xc914, // sw      a3,16(a0)
-  0x455c, // lw      a5,12(a0)
 
-  0x8b85, // andi    a5,a5,1
-  0xfff5, // bnez    a5,15a <waitloop1>
+  // wait for ack
+  0x4540, // lw      s0,12(a0)
+  0x8805, // andi    s0,s0,1
+  0xfc75, // bnez    s0,15a <waitloop1>
+
+  // advance dest pointer and trigger START if we ended a page
   0x0611, // addi    a2,a2,4
-  0x9002, // ebreak
-
-  0x9002, // ebreak
-  0x9002, // ebreak
-  0x9002, // ebreak
-  0x9002, // ebreak
-
-  0x9002, // ebreak
-  0x9002, // ebreak
-  0x9002, // ebreak
-  0x9002, // ebreak
-  */
-
-  0x419c, // lw      a5,0(a1)
-  0xc21c, // sw      a5,0(a2)
-  0xc914, // sw      a3,16(a0)
-  0x455c, // lw      a5,12(a0)
-  0x8b85, // andi    a5,a5,1
-  0xfff5, // bnez    a5,15a <waitloop1>
-  0x0611, // addi    a2,a2,4
-  0x7793, // andi    a5,a2,63
-  0x03f6,
-  0xe791, // bnez    a5,172 <end>
+  0x7413, // andi    s0,a2,63
+  0x03f6, //
+  0xe419, // bnez    s0,174 <end>
   0xc918, // sw      a4,16(a0)
-  0x455c, // lw      a5,12(a0)
-  0x8b85, // andi    a5,a5,1
-  0xfff5, // bnez    a5,16a <waitloop2>
+
+  // wait for write to complete
+  0x4540, // lw      s0,12(a0)
+  0x8805, // andi    s0,s0,1
+  0xfc75, // bnez    s0,16a <waitloop2>
+
+  // update address
   0xc950, // sw      a2,20(a0)
-  0x9002, // ebreak
+
+  // reset buffer
+  0xc91c, // sw      a5,16(a0)
 };
 
 void on_write_page(SLDebugger& sl) {
@@ -255,10 +244,12 @@ void on_write_page(SLDebugger& sl) {
   sl.put_gpr(12, 0x08000000);
   sl.put_gpr(13, BIT_CTLR_FTPG | BIT_CTLR_BUFLOAD);
   sl.put_gpr(14, BIT_CTLR_FTPG | BIT_CTLR_STRT);
+  sl.put_gpr(15, BIT_CTLR_FTPG | BIT_CTLR_BUFRST);
  
+  static int counter = 0;
   for (int page = 0; page < 14; page++) {
     for (int i = 0; i < 16; i++) {
-      sl.put(ADDR_DATA0,   0xBEEF0000 + i);
+      sl.put(ADDR_DATA0,   0xBEEF0000 + counter++);
       sl.put(ADDR_COMMAND, 0x00040000);
     }
     while(sl.get_abstatus().BUSY);
