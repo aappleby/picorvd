@@ -581,8 +581,6 @@ struct SLDebugger {
 
   void step();
 
-  int halt_count = 0;
-
   void stop_watchdogs();
 
   void reset_cpu();
