@@ -50,8 +50,8 @@ const uint32_t ADDR_FLASH_CTLR = 0x40022010;
 const uint32_t ADDR_FLASH_ADDR = 0x40022014;
 const uint32_t ADDR_FLASH_OBR = 0x4002201C;
 const uint32_t ADDR_FLASH_WPR = 0x40022020;
-const uint32_t ADDR_FLASH_MODEKEYR = 0x40022024;
-const uint32_t ADDR_FLASH_BOOT_MODEKEYR = 0x40022028;
+const uint32_t ADDR_FLASH_MKEYR = 0x40022024;
+const uint32_t ADDR_FLASH_BKEYR = 0x40022028;
 
 //------------------------------------------------------------------------------
 
@@ -73,7 +73,7 @@ struct Reg_CPBR {
   };
 
   void dump() {
-    //printf("  raw          = 0x%08x\n", raw);
+    printf("  raw          = 0x%08x\n", raw);
     printf("  TDIV         = %d\n", TDIV);
     printf("  SOPN         = %d\n", SOPN);
     printf("  CHECKSTA     = %d\n", CHECKSTA);
@@ -105,7 +105,7 @@ struct Reg_CFGR {
   };
 
   void dump() {
-    //printf("  raw          = 0x%08x\n", raw);
+    printf("  raw          = 0x%08x\n", raw);
     printf("  TDIVCFG      = %d\n", TDIVCFG   );
     printf("  SOPNCFG      = %d\n", SOPNCFG   );
     printf("  CHECKEN      = %d\n", CHECKEN   );
@@ -137,7 +137,7 @@ struct Reg_SHDWCFGR {
   };
 
   void dump() {
-    //printf("  raw          = 0x%08x\n", raw);
+    printf("  raw          = 0x%08x\n", raw);
     printf("  TDIVCFG      = %d\n", TDIVCFG   );
     printf("  SOPNCFG      = %d\n", SOPNCFG   );
     printf("  CHECKEN      = %d\n", CHECKEN   );
@@ -166,7 +166,7 @@ struct Reg_DMCONTROL {
   };
 
   void dump() {
-    //printf("  raw           = 0x%08x\n", raw);
+    printf("  raw           = 0x%08x\n", raw);
     printf("  DMACTIVE      = %d\n", DMACTIVE);
     printf("  NDMRESET      = %d\n", NDMRESET);
     printf("  ACKHAVERESET  = %d\n", ACKHAVERESET);
@@ -244,7 +244,7 @@ struct Reg_HARTINFO {
   };
 
   void dump() {
-    //printf("  raw           = 0x%08x\n", raw);
+    printf("  raw           = 0x%08x\n", raw);
     printf("  DATAADDR      = %d\n", DATAADDR  );
     printf("  DATASIZE      = %d\n", DATASIZE  );
     printf("  DATAACCESS    = %d\n", DATAACCESS);
@@ -273,7 +273,7 @@ struct Reg_ABSTRACTCS {
   };
 
   void dump() {
-    //printf("  raw           = 0x%08x\n", raw);
+    printf("  raw           = 0x%08x\n", raw);
     printf("  DATACOUNT     = %d\n", DATACOUNT  );
     printf("  CMDER         = %d\n", CMDER      );
     printf("  BUSY          = %d\n", BUSY       );
@@ -300,7 +300,7 @@ struct Reg_COMMAND {
   };
 
   void dump() {
-    //printf("  raw           = 0x%08x\n", raw);
+    printf("  raw           = 0x%08x\n", raw);
     printf("  REGNO         = 0x%x\n", REGNO      );
     printf("  WRITE         = %d\n", WRITE      );
     printf("  TRANSFER      = %d\n", TRANSFER   );
@@ -325,7 +325,7 @@ struct Reg_AUTOCMD {
   };
 
   void dump() {
-    //printf("  raw           = 0x%08x\n", raw);
+    printf("  raw           = 0x%08x\n", raw);
     printf("  AUTOEXECDATA  = %d\n", AUTOEXECDATA);
     printf("  AUTOEXECPROG  = %d\n", AUTOEXECPROG);
   }
@@ -344,7 +344,7 @@ struct Reg_HALTSUM0 {
   };
 
   void dump() {
-    //printf("  raw           = 0x%08x\n", raw);
+    printf("  raw           = 0x%08x\n", raw);
     printf("  HALTSUM0      = %d\n", HALTSUM0);
   }
 };
@@ -372,7 +372,7 @@ struct Reg_DCSR {
   };
 
   void dump() {
-    //printf("  raw           = 0x%08x\n", raw);
+    printf("  raw           = 0x%08x\n", raw);
     printf("  PRV           = %d\n", PRV       );
     printf("  STEP          = %d\n", STEP      );
     printf("  CAUSE         = %d\n", CAUSE     );
@@ -433,7 +433,7 @@ struct Reg_FLASH_STATR {
   };
 
   void dump() {
-    //printf("  raw           = 0x%08x\n", raw);
+    printf("  raw           = 0x%08x\n", raw);
     printf("  BUSY        = %d\n", BUSY     );
     printf("  WRPRTERR    = %d\n", WRPRTERR );
     printf("  EOP         = %d\n", EOP      );
@@ -444,6 +444,22 @@ struct Reg_FLASH_STATR {
 static_assert(sizeof(Reg_FLASH_STATR) == 4);
 
 //------------------------------------------------------------------------------
+
+const auto BIT_CTLR_PG      = (1 <<  0);
+const auto BIT_CTLR_PER     = (1 <<  1);
+const auto BIT_CTLR_MER     = (1 <<  2);
+const auto BIT_CTLR_OBG     = (1 <<  4);
+const auto BIT_CTLR_OBER    = (1 <<  5);
+const auto BIT_CTLR_STRT    = (1 <<  6);
+const auto BIT_CTLR_LOCK    = (1 <<  7);
+const auto BIT_CTLR_OBWRE   = (1 <<  9);
+const auto BIT_CTLR_ERRIE   = (1 << 10);
+const auto BIT_CTLR_EOPIE   = (1 << 12);
+const auto BIT_CTLR_FLOCK   = (1 << 15);
+const auto BIT_CTLR_FTPG    = (1 << 16);
+const auto BIT_CTLR_FTER    = (1 << 17);
+const auto BIT_CTLR_BUFLOAD = (1 << 18);
+const auto BIT_CTLR_BUFRST  = (1 << 19);
 
 struct Reg_FLASH_CTLR {
   union {
@@ -475,6 +491,7 @@ struct Reg_FLASH_CTLR {
   };
 
   void dump() {
+    printf("  raw         = 0x%08x\n", raw);
     printf("  PG          = %d\n", PG      );
     printf("  PER         = %d\n", PER     );
     printf("  MER         = %d\n", MER     );
@@ -514,6 +531,7 @@ struct Reg_FLASH_OBR {
   };
 
   void dump() {
+    printf("  raw         = 0x%08x\n", raw);
     printf("  OBERR       = %d\n", OBERR       );
     printf("  RDPRT       = %d\n", RDPRT       );
     printf("  IWDG_SW     = %d\n", IWDG_SW     );
@@ -532,14 +550,14 @@ struct SLDebugger {
   void init(int swd_pin);
   void reset();
 
-  void get(uint8_t addr, void* out) const;
+  void getp(uint8_t addr, void* out) const;
   void put(uint8_t addr, uint32_t data) const;
 
   uint32_t get_mem32(uint32_t addr);
   void     put_mem32(uint32_t addr, uint32_t data);
 
-  void     get_mem32(uint32_t addr, void* data);
-  void     put_mem32(uint32_t addr, void* data);
+  void     get_mem32p(uint32_t addr, void* data);
+  void     put_mem32p(uint32_t addr, void* data);
 
   void put_mem16(uint32_t addr, uint16_t data);
 
@@ -556,15 +574,19 @@ struct SLDebugger {
   uint32_t get_ds0() const  { uint32_t r; get_csr(0x7B2, &r); return r; }
   uint32_t get_ds1() const  { uint32_t r; get_csr(0x7B3, &r); return r; }
 
+  int unlock_count = 0;
   bool is_flash_locked();
-  void unlock_flash();
   void lock_flash();
+  void unlock_flash();
+
   void erase_flash_page(int addr);
   void write_flash_word(int addr, uint16_t data);
 
   bool test_mem();
 
   void step();
+
+  int halt_count = 0;
 
   void halt();
   void unhalt();

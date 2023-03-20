@@ -74,15 +74,21 @@ void SLDebugger::reset() {
 //-----------------------------------------------------------------------------
 
 void SLDebugger::halt() {
-  put(ADDR_DMCONTROL, 0x80000001);
-  while (!get_dmstatus().ALLHALTED);
-  put(ADDR_DMCONTROL, 0x00000001);
+  if (halt_count == 0) {
+    put(ADDR_DMCONTROL, 0x80000001);
+    while (!get_dmstatus().ALLHALTED);
+    put(ADDR_DMCONTROL, 0x00000001);
+  }
+  halt_count++;
 }
 
 void SLDebugger::unhalt() {
-  put(ADDR_DMCONTROL, 0x40000001);
-  while (get_dmstatus().ANYHALTED);
-  put(ADDR_DMCONTROL, 0x00000001);
+  halt_count--;
+  if (halt_count == 0) {
+    put(ADDR_DMCONTROL, 0x40000001);
+    while (get_dmstatus().ANYHALTED);
+    put(ADDR_DMCONTROL, 0x00000001);
+  }
 }
 
 // Where did this come from?
@@ -113,7 +119,7 @@ void SLDebugger::load_prog(uint32_t* prog) {
 
 //-----------------------------------------------------------------------------
 
-void SLDebugger::get(uint8_t addr, void* out) const {
+void SLDebugger::getp(uint8_t addr, void* out) const {
   addr = ((~addr) << 1) | 1;
   pio_sm_put_blocking(pio0, 0, addr);
   *(uint32_t*)out = pio_sm_get_blocking(pio0, 0);
@@ -163,19 +169,19 @@ static uint32_t prog_put16[8] = {
 
 uint32_t SLDebugger::get_mem32(uint32_t addr) {
   uint32_t data;
-  get_mem32(addr, &data);
+  get_mem32p(addr, &data);
   return data;
 }
 
-void SLDebugger::get_mem32(uint32_t addr, void* data) {
+void SLDebugger::get_mem32p(uint32_t addr, void* data) {
   load_prog(prog_get32);
   put(ADDR_DATA0,   0xDEADBEEF);
   put(ADDR_DATA1,   addr);
   put(ADDR_COMMAND, cmd_runprog);
-  get(ADDR_DATA0,   data);
+  getp(ADDR_DATA0,   data);
 }
 
-void SLDebugger::put_mem32(uint32_t addr, void* data) {
+void SLDebugger::put_mem32p(uint32_t addr, void* data) {
   load_prog(prog_put32);
   put(ADDR_DATA0,   *(uint32_t*)data);
   put(ADDR_DATA1,   addr);
@@ -230,7 +236,7 @@ void SLDebugger::get_block32(uint32_t addr, void* data, int size_dwords) {
   put(ADDR_AUTOCMD, 0x00000001);
   put(ADDR_COMMAND, cmd_runprog);
   for (int i = 0; i < size_dwords; i++) {
-    get(ADDR_DATA0, cursor++);
+    getp(ADDR_DATA0, cursor++);
   }
 
   put(ADDR_AUTOCMD, 0x00000000);
@@ -261,42 +267,51 @@ void SLDebugger::put_block32(uint32_t addr, void* data, int size_dwords) {
 
 bool SLDebugger::is_flash_locked() {
   // seems to work
-  uint32_t c = get_mem32(ADDR_FLASH_CTLR);
-  return c & (1 << 7);
+  //uint32_t c = get_mem32(ADDR_FLASH_CTLR);
+  //return c & (1 << 7);
+  return unlock_count == 0;
 }
 
 void SLDebugger::unlock_flash() {
-  // seems to work
-  put_mem32(ADDR_FLASH_KEYR, 0x45670123);
-  put_mem32(ADDR_FLASH_KEYR, 0xCDEF89AB);
+  if (unlock_count == 0) {
+    // seems to work
+    put_mem32(ADDR_FLASH_KEYR, 0x45670123);
+    put_mem32(ADDR_FLASH_KEYR, 0xCDEF89AB);
+    put_mem32(ADDR_FLASH_MKEYR, 0x45670123);
+    put_mem32(ADDR_FLASH_MKEYR, 0xCDEF89AB);
+  }
+  unlock_count++;
 }
 
 void SLDebugger::lock_flash() {
-  // seems to work
-  uint32_t c = get_mem32(ADDR_FLASH_CTLR);
-  put_mem32(ADDR_FLASH_CTLR, c | (1 << 7));
+  unlock_count--;
+  if (unlock_count == 0) {
+    // seems to work
+    uint32_t c = get_mem32(ADDR_FLASH_CTLR);
+    put_mem32(ADDR_FLASH_CTLR, c | (1 << 7));
+  }
 }
 
 //-----------------------------------------------------------------------------
 
 void SLDebugger::erase_flash_page(int addr) {
   Reg_FLASH_CTLR c;
-  get_mem32(ADDR_FLASH_CTLR, &c);
+  get_mem32p(ADDR_FLASH_CTLR, &c);
   c.PER = 1;
-  put_mem32(ADDR_FLASH_CTLR, &c);
+  put_mem32p(ADDR_FLASH_CTLR, &c);
   put_mem32(ADDR_FLASH_ADDR, addr);
   c.STRT = 1;
-  put_mem32(ADDR_FLASH_CTLR, &c);
+  put_mem32p(ADDR_FLASH_CTLR, &c);
 
   while (1) {
     Reg_FLASH_STATR s;
-    get_mem32(ADDR_FLASH_STATR, &s);
+    get_mem32p(ADDR_FLASH_STATR, &s);
     if (!s.BUSY) break;
   }
 
   c.PER = 0;
   c.STRT = 0;
-  put_mem32(ADDR_FLASH_CTLR, &c);
+  put_mem32p(ADDR_FLASH_CTLR, &c);
 }
 
 //-----------------------------------------------------------------------------
@@ -306,9 +321,9 @@ void SLDebugger::write_flash_word(int addr, uint16_t data) {
 
   // enable flash programming
   Reg_FLASH_CTLR c;
-  get_mem32(ADDR_FLASH_CTLR, &c);
+  get_mem32p(ADDR_FLASH_CTLR, &c);
   c.PG = 1;
-  put_mem32(ADDR_FLASH_CTLR, &c);
+  put_mem32p(ADDR_FLASH_CTLR, &c);
 
   // write flash
   put_mem16(addr, data);
@@ -316,26 +331,26 @@ void SLDebugger::write_flash_word(int addr, uint16_t data) {
   // wait until not busy
   while (1) {
     Reg_FLASH_STATR s;
-    get_mem32(ADDR_FLASH_STATR, &s);
+    get_mem32p(ADDR_FLASH_STATR, &s);
     if (!s.BUSY) break;
   }
 
   // disable flash programming
   c.PG = 0;
-  put_mem32(ADDR_FLASH_CTLR, &c);
+  put_mem32p(ADDR_FLASH_CTLR, &c);
 }
 
 //-----------------------------------------------------------------------------
 
 const Reg_DMSTATUS SLDebugger::get_dmstatus() const {
   Reg_DMSTATUS r;
-  get(ADDR_DMSTATUS, &r);
+  getp(ADDR_DMSTATUS, &r);
   return r;
 }
 
 const Reg_ABSTRACTCS SLDebugger::get_abstatus() const {
   Reg_ABSTRACTCS r;
-  get(ADDR_ABSTRACTCS, &r);
+  getp(ADDR_ABSTRACTCS, &r);
   return r;
 }
 
@@ -354,7 +369,7 @@ uint32_t SLDebugger::get_gpr(int index) const {
 
   uint32_t result = 0;
   put(ADDR_COMMAND, cmd.raw);
-  get(ADDR_DATA0, &result);
+  getp(ADDR_DATA0, &result);
   return result;
 }
 
@@ -385,7 +400,7 @@ void SLDebugger::get_csr(int index, void* data) const {
   cmd.CMDTYPE    = 0;
 
   put(ADDR_COMMAND, cmd.raw);
-  get(ADDR_DATA0, data);
+  getp(ADDR_DATA0, data);
 }
 
 //------------------------------------------------------------------------------
@@ -431,7 +446,7 @@ bool SLDebugger::test_mem() {
   for (int i = 0; i < size_dwords; i++) {
     addr = base + (4 * i);
     uint32_t data = 0xDEADBEEF;
-    get_mem32(addr, &data);
+    get_mem32p(addr, &data);
     if (data != 0xBEEF0000 + i) {
       printf("Memory test fail at 0x%08x : expected 0x%08x, got 0x%08x\n", addr, 0xBEEF0000 + i, data);
       fail = true;
@@ -439,7 +454,7 @@ bool SLDebugger::test_mem() {
   }
 
   Reg_ABSTRACTCS reg_abstractcs;
-  get(ADDR_ABSTRACTCS, &reg_abstractcs);
+  getp(ADDR_ABSTRACTCS, &reg_abstractcs);
   if (reg_abstractcs.CMDER) {
     printf("Memory test fail, CMDER=%d\n", reg_abstractcs.CMDER);
     fail = true;

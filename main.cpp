@@ -47,18 +47,235 @@ void mix(uint32_t& x) {
 
 //------------------------------------------------------------------------------
 
+void on_halt(SLDebugger& sl) {
+  sl.halt();
+}
+
+void on_unhalt(SLDebugger& sl) {
+  sl.unhalt();
+}
+
+//------------------------------------------------------------------------------
+
 void on_status(SLDebugger& sl) {
   ser_printf("on_status()\n");
 
-  usb_printf("Status message!\n");
+  Reg_CPBR       reg_cpbr;
+  Reg_CFGR       reg_cfgr;
+  Reg_SHDWCFGR   reg_shdwcfgr;
+  Reg_DMCONTROL  reg_dmctrl;
+  Reg_DMSTATUS   reg_dmstatus;
+  Reg_ABSTRACTCS reg_abstractcs;
+
+  Reg_DCSR dcsr;
+  uint32_t dpc  = 0xDEADBEEF;
+  uint32_t ds0  = 0xDEADBEEF;
+  uint32_t ds1  = 0xDEADBEEF;
+
+  //----------
+
+  sl.halt();
+
+  sl.getp(ADDR_CPBR,       &reg_cpbr);
+  sl.getp(ADDR_CFGR,       &reg_cfgr);
+  sl.getp(ADDR_SHDWCFGR,   &reg_shdwcfgr);
+  sl.getp(ADDR_DMCONTROL,  &reg_dmctrl);
+  sl.getp(ADDR_DMSTATUS,   &reg_dmstatus);
+  sl.getp(ADDR_ABSTRACTCS, &reg_abstractcs);
+
+  sl.get_csr(0x7B0, &dcsr);
+  sl.get_csr(0x7B1, &dpc);
+  sl.get_csr(0x7B2, &ds0);
+  sl.get_csr(0x7B3, &ds1);
+
+  sl.unhalt();
+
+  //----------
+
+  //usb_printf("reg_cpbr\n");       reg_cpbr.dump();       printf("\n");
+  //usb_printf("reg_cfgr\n");       reg_cfgr.dump();       printf("\n");
+  //usb_printf("reg_shdwcfgr\n");   reg_shdwcfgr.dump();   printf("\n");
+  usb_printf("reg_dmcontrol\n");  reg_dmctrl.dump();     usb_printf("\n");
+  usb_printf("reg_dmstatus\n");   reg_dmstatus.dump();   usb_printf("\n");
+  usb_printf("reg_abstractcs\n"); reg_abstractcs.dump(); usb_printf("\n");
+  usb_printf("reg_dcsr\n");       dcsr.dump();       usb_printf("\n");
+  usb_printf("dpc  0x%08x\n", dpc);
+  usb_printf("ds0  0x%08x\n", ds0);
+  usb_printf("ds1  0x%08x\n", ds1);
+  usb_printf("\n");
 
   ser_printf("on_status() done\n");
 }
 
 //------------------------------------------------------------------------------
 
+uint16_t prog_run_task[16] = {
+  0xc94c, // sw      a1,20(a0)
+  0xc910, // sw      a2,16(a0)
+  0xc914, // sw      a3,16(a0)
+  0x455c, // lw      a5,12(a0)
+  0x8b85, // andi    a5,a5,1
+  0xfff5, // bnez    a5,17c <_Z14do_flash_thingRV9Reg_FLASHPvmm+0x6>
+  0x2823, // sw      zero,16(a0)
+  0x0005, //
+  0x9002, // ebreak
+  0x9002, // ebreak
+  0x9002, // ebreak
+  0x9002, // ebreak
+  0x9002, // ebreak
+  0x9002, // ebreak
+  0x9002, // ebreak
+  0x9002, // ebreak
+};
+
+/*
+__attribute__((noinline))
+void do_flash_thing(volatile Reg_FLASH& flash, void* addr, uint32_t c1, uint32_t c2) {
+  flash.addr = (uint32_t)addr;
+  flash.ctlr.raw = c1;
+  flash.ctlr.raw = c2;
+  while(flash.statr.BUSY);
+  flash.ctlr.raw = 0;
+}
+*/
+
+void on_wipe_chip(SLDebugger& sl) {
+  ser_printf("on_wipe_chip()\n");
+
+  sl.halt();
+  sl.unlock_flash();
+
+  // a0 = flash
+  // a1 = addr
+  // a2 = BIT_CTLR_MER
+  // a3 = BIT_CTLR_MER | BIT_CTLR_STRT
+
+  sl.load_prog((uint32_t*)prog_run_task);
+  sl.put_gpr(10, 0x40022000);
+  sl.put_gpr(11, 0);
+  sl.put_gpr(12, BIT_CTLR_MER);
+  sl.put_gpr(13, BIT_CTLR_MER | BIT_CTLR_STRT);
+  sl.put(ADDR_COMMAND, 0x00040000);
+
+  while (!sl.get_dmstatus().ALLHALTED);
+
+  sl.lock_flash();
+  sl.unhalt();
+
+  ser_printf("on_wipe_chip() done\n");
+}
+
+//------------------------------------------------------------------------------
+
+uint16_t prog_write_incremental[16] = {
+  /*
+  0x419c, // lw      a5,0(a1)
+  0xc21c, // sw      a5,0(a2)
+  0xc914, // sw      a3,16(a0)
+  0x455c, // lw      a5,12(a0)
+
+  0x8b85, // andi    a5,a5,1
+  0xfff5, // bnez    a5,15a <waitloop1>
+  0x0611, // addi    a2,a2,4
+  0x9002, // ebreak
+
+  0x9002, // ebreak
+  0x9002, // ebreak
+  0x9002, // ebreak
+  0x9002, // ebreak
+
+  0x9002, // ebreak
+  0x9002, // ebreak
+  0x9002, // ebreak
+  0x9002, // ebreak
+  */
+
+  0x419c, // lw      a5,0(a1)
+  0xc21c, // sw      a5,0(a2)
+  0xc914, // sw      a3,16(a0)
+  0x455c, // lw      a5,12(a0)
+  0x8b85, // andi    a5,a5,1
+  0xfff5, // bnez    a5,15a <waitloop1>
+  0x0611, // addi    a2,a2,4
+  0x7793, // andi    a5,a2,63
+  0x03f6,
+  0xe791, // bnez    a5,172 <end>
+  0xc918, // sw      a4,16(a0)
+  0x455c, // lw      a5,12(a0)
+  0x8b85, // andi    a5,a5,1
+  0xfff5, // bnez    a5,16a <waitloop2>
+  0xc950, // sw      a2,20(a0)
+  0x9002, // ebreak
+};
+
+void on_write_page(SLDebugger& sl) {
+  ser_printf("on_write_page()\n");
+
+  sl.halt();
+  sl.unlock_flash();
+
+#if 0
+  sl.put_mem32(ADDR_FLASH_CTLR, BIT_CTLR_FTPG | BIT_CTLR_BUFRST);
+  // while(flash.statr.BUSY); // This doesn't appear to be necessary?
+  sl.put_mem32(ADDR_FLASH_ADDR, 0x08000000);
+
+  // a0 = flash
+  // a1 = &data0
+  // a2 = addr to write
+  // a3 = BIT_CTLR_FTPG | BIT_CTLR_BUFLOAD
+  // a4 = BIT_CTLR_FTPG | BIT_CTLR_STRT
+  // a5 = temp
+
+  sl.load_prog((uint32_t*)prog_write_incremental);
+  sl.put_gpr(10, 0x40022000);
+  sl.put_gpr(11, 0xE00000F4);
+  sl.put_gpr(12, 0x08000000);
+  sl.put_gpr(12, BIT_CTLR_FTPG | BIT_CTLR_BUFLOAD);
+  sl.put_gpr(13, BIT_CTLR_FTPG | BIT_CTLR_STRT);
+  
+  sl.put(ADDR_AUTOCMD, 1);
+  sl.put(ADDR_DATA0,   0xBEEF0000);
+  sl.put(ADDR_COMMAND, 0x00040000);
+
+  for (int i = 1; i < 16; i++) {
+    sl.put(ADDR_DATA0, 0xBEEF0000 + i);
+  }
+
+  sl.put_mem32(ADDR_FLASH_CTLR, 0);
+#endif
+
+  sl.put_mem32(ADDR_FLASH_ADDR, 0x08000000);
+  sl.put_mem32(ADDR_FLASH_CTLR, BIT_CTLR_FTPG | BIT_CTLR_BUFRST);
+  sleep_ms(100);
+
+  sl.load_prog((uint32_t*)prog_write_incremental);
+
+  sl.put_gpr(10, 0x40022000);
+  sl.put_gpr(11, 0xE00000F4);
+  sl.put_gpr(12, 0x08000000);
+  sl.put_gpr(13, BIT_CTLR_FTPG | BIT_CTLR_BUFLOAD);
+  sl.put_gpr(14, BIT_CTLR_FTPG | BIT_CTLR_STRT);
+ 
+  for (int page = 0; page < 14; page++) {
+    for (int i = 0; i < 16; i++) {
+      sl.put(ADDR_DATA0,   0xBEEF0000 + i);
+      sl.put(ADDR_COMMAND, 0x00040000);
+    }
+    while(sl.get_abstatus().BUSY);
+  }
+
+  sl.put_mem32(ADDR_FLASH_CTLR, 0);
+
+  sl.lock_flash();
+  sl.unhalt();
+
+  ser_printf("on_write_page() done\n");
+}
+
+//------------------------------------------------------------------------------
+
 void test_thingy(SLDebugger& sl) {
-  printf("testing thingy\n");
+  usb_printf("testing thingy\n");
 
   sl.halt();
   bool lock1 = sl.is_flash_locked();
@@ -68,13 +285,13 @@ void test_thingy(SLDebugger& sl) {
   bool lock3 = sl.is_flash_locked();
   sl.unhalt();
 
-  printf("l1 %d l2 %d l3 %d\n", lock1, lock2, lock3);
+  usb_printf("l1 %d l2 %d l3 %d\n", lock1, lock2, lock3);
 }
 
 //------------------------------------------------------------------------------
 
 void test_other_thingy(SLDebugger& sl) {
-  printf("testing other thingy\n");
+  usb_printf("testing other thingy\n");
 
   uint32_t temp[32] = {0};
 
@@ -99,7 +316,7 @@ void test_other_thingy(SLDebugger& sl) {
   sl.unhalt();
 
   for (int i = 0; i < 4; i++) {
-    printf("temp[%d] = 0x%08x\n", i, temp[i]);
+    usb_printf("temp[%d] = 0x%08x\n", i, temp[i]);
   }
 }
 
@@ -115,14 +332,14 @@ void dump_ram(SLDebugger& sl) {
 
   for (int y = 0; y < 32; y++) {
     for (int x = 0; x < 16; x++) {
-      printf("0x%08x ", temp[x + y * 16]);
+      usb_printf("0x%08x ", temp[x + y * 16]);
     }
-    printf("\n");
+    usb_printf("\n");
   }
 }
 
-void dump_flash(SLDebugger& sl) {
-  uint32_t temp[512];
+void on_dump_flash(SLDebugger& sl) {
+  uint32_t temp[256];
 
   Reg_FLASH_STATR s;
   Reg_FLASH_CTLR c;
@@ -130,142 +347,27 @@ void dump_flash(SLDebugger& sl) {
   uint32_t flash_wpr = 0;
 
   sl.halt();
-  sl.get_mem32(ADDR_FLASH_WPR, &flash_wpr);
-  sl.get_mem32(ADDR_FLASH_STATR, &s);
-  sl.get_mem32(ADDR_FLASH_CTLR, &c);
-  sl.get_mem32(ADDR_FLASH_OBR, &o);
-  sl.get_block32(0x08000000, temp, 512);
+  sl.get_mem32p(ADDR_FLASH_WPR, &flash_wpr);
+  sl.get_mem32p(ADDR_FLASH_STATR, &s);
+  sl.get_mem32p(ADDR_FLASH_CTLR, &c);
+  sl.get_mem32p(ADDR_FLASH_OBR, &o);
+  sl.get_block32(0x08000000, temp, 256);
   sl.unhalt();
 
-  printf("flash_wpr 0x%08x\n", flash_wpr);
-  printf("Reg_FLASH_STATR\n");
+  usb_printf("flash_wpr 0x%08x\n", flash_wpr);
+  usb_printf("Reg_FLASH_STATR\n");
   s.dump();
-  printf("Reg_FLASH_CTLR\n");
+  usb_printf("Reg_FLASH_CTLR\n");
   c.dump();
-  printf("Reg_FLASH_OBR\n");
+  usb_printf("Reg_FLASH_OBR\n");
   o.dump();
 
-  for (int y = 0; y < 32; y++) {
+  for (int y = 0; y < 16; y++) {
     for (int x = 0; x < 16; x++) {
-      printf("0x%08x ", temp[x + y * 16]);
+      usb_printf("0x%08x ", temp[x + y * 16]);
     }
-    printf("\n");
+    usb_printf("\n");
   }
-}
-
-//------------------------------------------------------------------------------
-
-void test_flash_write(SLDebugger& sl) {
-  sl.halt();
-  sl.stop_watchdogs();
-  sl.unlock_flash();
-
-  //printf("Starting flash write page\n");
-  //sl.write_flash_word(0x08000000 + 1024, 0x5A5A);
-  //sl.erase_flash_page(0x08000000 + 1024);
-  /*
-  for (int i = 0; i < 512; i++) {
-    sl.write_flash_word(0x08000000 + (i * 2), 0x5A5A);
-  }
-  */
-  //sl.erase_flash_page(0x08000000);
-  /*
-  for (int i = 0; i < 10; i++) {
-    sl.write_flash_word(0x08000000 + (i * 2), 0x5A5A);
-  }
-  */
-  //sl.write_flash_word(0x08000002, 0x5A5A);
-  //sl.erase_flash_page(0x08000000);
-
-  //sl.get_mem32(ADDR_FLASH_CTLR, &c);
-  //c.PG = 1;
-  //sl.put_mem32(ADDR_FLASH_CTLR, &c);
-  //sl.put_mem16(0x08000000 + 64 + (0 * 2), 0x5A5A);
-
-  if (1) {
-    Reg_FLASH_CTLR c;
-    sl.get_mem32(ADDR_FLASH_CTLR, &c);
-    c.PG = 1;
-    sl.put_mem32(ADDR_FLASH_CTLR, &c);
-
-    /*
-    // write flash
-    sl.put_mem16(0x08000080, 0xCDCD);
-    while (1) {
-      Reg_FLASH_STATR s;
-      sl.get_mem32(ADDR_FLASH_STATR, &s);
-      if (!s.BUSY || s.EOP) break;
-    }
-
-    sl.put_mem16(0x08000082, 0xCDCD);
-    while (1) {
-      Reg_FLASH_STATR s;
-      sl.get_mem32(ADDR_FLASH_STATR, &s);
-      if (!s.BUSY || s.EOP) break;
-    }
-    */
-
-    for (int i = 0; i < 32; i++) {
-      sl.put_mem16(0x08000240 + (2 * i), 0xAACD);
-      while (1) {
-        Reg_FLASH_STATR s;
-        sl.get_mem32(ADDR_FLASH_STATR, (void*)&s);
-        printf("0x%08x\n", s.raw);
-        if (!s.BUSY || s.EOP) break;
-        //if (!s.BUSY) break;
-      }
-    }
-
-    c.PG = 0;
-    sl.put_mem32(ADDR_FLASH_CTLR, &c);
-  }
-
-
-  //sl.write_flash_word(0x08000000, 0x1313);
-  //sl.write_flash_word(0x08000002, 0x5A5A);
-  //sl.write_flash_word(0x08000000 + 64 + (2 * 2), 0x5A5A);
-  //sl.write_flash_word(0x08000000 + 64 + (3 * 2), 0x5A5A);
-  //printf("Flash write page done\n");
-
-  sl.lock_flash();
-
-  dump_flash(sl);
-
-  sl.unhalt();
-}
-
-//------------------------------------------------------------------------------
-
-void dump_csrs(SLDebugger& sl) {
-  sl.halt();
-
-  Reg_DCSR reg_dcsr;
-  uint32_t dpc  = 0xDEADBEEF;
-  uint32_t ds0  = 0xDEADBEEF;
-  uint32_t ds1  = 0xDEADBEEF;
-
-  sl.get_csr(0x7B0, &reg_dcsr);
-  sl.get_csr(0x7B1, &dpc);
-  sl.get_csr(0x7B2, &ds0);
-  sl.get_csr(0x7B3, &ds1);
-
-  Reg_DMCONTROL reg_dmctrl;
-  Reg_DMSTATUS reg_dmstatus;
-  Reg_ABSTRACTCS reg_abstractcs;
-  sl.get(ADDR_DMCONTROL,  &reg_dmctrl);
-  sl.get(ADDR_DMSTATUS,   &reg_dmstatus);
-  sl.get(ADDR_ABSTRACTCS, &reg_abstractcs);
-
-  sl.unhalt();
-
-  printf("dpc  0x%08x\n", dpc);
-  printf("ds0  0x%08x\n", ds0);
-  printf("ds1  0x%08x\n", ds1);
-  printf("\n");
-  printf("reg_dcsr\n");       reg_dcsr.dump();       printf("\n");
-  printf("reg_dmcontrol\n");  reg_dmctrl.dump();     printf("\n");
-  printf("reg_dmstatus\n");   reg_dmstatus.dump();   printf("\n");
-  printf("reg_abstractcs\n"); reg_abstractcs.dump(); printf("\n");
 }
 
 //------------------------------------------------------------------------------
@@ -274,61 +376,59 @@ int main() {
   set_sys_clock_khz(100000, true);
   stdio_usb_init();
   while(!stdio_usb_connected());
-  sleep_ms(100);
 
   uart_init(uart0, 3000000);
   gpio_set_function(0, GPIO_FUNC_UART);
   gpio_set_function(1, GPIO_FUNC_UART);  
 
-  /*
-  static int rep = 0;
-  while(1) {
-    usb_printf("Hello World usb %d\n", rep);
-    ser_printf("Hello World ser %d\n", rep);
-    rep++;
-    sleep_ms(100);
-  }
-  */
+  // Wait for Minicom to finish connecting before sending clear screen etc
+  sleep_ms(100);
 
   SLDebugger sl;
   sl.init(SWD_PIN);
   sl.reset();
+  sl.halt();
 
   char command[256] = {0};
   uint8_t cursor = 0;
 
-  printf("\033[2J");
+  usb_printf("\033[2J");
   usb_printf("PicoDebug 0.0.0\n");
   ser_printf("<debug log begin>\n");
 
   while(1) {
-    printf("> ");
+    usb_printf("> ");
     while(1) {
       auto c = getchar();
-      //printf("%d\n", c);
+      //usb_printf("%d\n", c);
       if (c == 8) {
-        printf("\b \b");
+        usb_printf("\b \b");
         cursor--;
         command[cursor] = 0;
       }
       else if (c == '\n' || c == '\r') {
         command[cursor] = 0;
-        printf("\n");
+        usb_printf("\n");
         break;
       }
       else {
-        printf("%c", c);
+        usb_printf("%c", c);
         command[cursor++] = c;
       }
     }
 
+    if (strcmp(command, "halt") == 0)       on_halt(sl);
     if (strcmp(command, "status") == 0)     on_status(sl);
-    if (strcmp(command, "test1") == 0)      test_thingy(sl);
-    if (strcmp(command, "test2") == 0)      test_other_thingy(sl);
-    if (strcmp(command, "dump_csrs") == 0)  dump_csrs(sl);
-    if (strcmp(command, "dump_ram") == 0)   dump_ram(sl);
-    if (strcmp(command, "dump_flash") == 0) dump_flash(sl);
-    if (strcmp(command, "test_flash_write") == 0) test_flash_write(sl);
+    if (strcmp(command, "dump_flash") == 0) on_dump_flash(sl);
+    if (strcmp(command, "wipe_chip") == 0)  on_wipe_chip(sl);
+    if (strcmp(command, "write_page") == 0) on_write_page(sl);
+
+
+    //if (strcmp(command, "test1") == 0)      test_thingy(sl);
+    //if (strcmp(command, "test2") == 0)      test_other_thingy(sl);
+    //if (strcmp(command, "dump_csrs") == 0)  dump_csrs(sl);
+    //if (strcmp(command, "dump_ram") == 0)   dump_ram(sl);
+    //if (strcmp(command, "test_flash_write") == 0) test_flash_write(sl);
 
     cursor = 0;
     command[cursor] = 0;
