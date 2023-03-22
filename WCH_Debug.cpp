@@ -128,10 +128,6 @@ void SLDebugger::put_dbg(uint8_t addr, uint32_t data) {
   pio_sm_put_blocking(pio0, 0, data);
 }
 
-void SLDebugger::get_dbgp(uint8_t addr, void* out) {
-  *(uint32_t*)out = get_dbg(addr);
-}
-
 //-----------------------------------------------------------------------------
 
 void SLDebugger::load_prog(uint32_t* prog) {
@@ -179,9 +175,11 @@ static uint32_t prog_put16[8] = {
 };
 
 uint32_t SLDebugger::get_mem32(uint32_t addr) {
-  uint32_t data;
-  get_mem32p(addr, &data);
-  return data;
+  load_prog(prog_get32);
+  put_dbg(ADDR_DATA0,   0xDEADBEEF);
+  put_dbg(ADDR_DATA1,   addr);
+  put_dbg(ADDR_COMMAND, cmd_runprog);
+  return get_dbg(ADDR_DATA0);
 }
 
 void SLDebugger::put_mem32(uint32_t addr, uint32_t data) {
@@ -197,10 +195,6 @@ void SLDebugger::get_mem32p(uint32_t addr, void* data) {
   put_dbg(ADDR_DATA1,   addr);
   put_dbg(ADDR_COMMAND, cmd_runprog);
   *(uint32_t*)data = get_dbg(ADDR_DATA0);
-}
-
-void SLDebugger::put_mem32p(uint32_t addr, void* data) {
-  put_mem32(addr, *(uint32_t*)data);
 }
 
 void SLDebugger::put_mem16(uint32_t addr, uint16_t data) {
@@ -384,8 +378,7 @@ bool SLDebugger::test_mem() {
   bool fail = false;
   for (int i = 0; i < size_dwords; i++) {
     addr = base + (4 * i);
-    uint32_t data = 0xDEADBEEF;
-    get_mem32p(addr, &data);
+    uint32_t data = get_mem32(addr);
     if (data != 0xBEEF0000 + i) {
       print("Memory test fail at 0x%08x : expected 0x%08x, got 0x%08x\n", addr, 0xBEEF0000 + i, data);
       fail = true;
@@ -576,22 +569,13 @@ void SLDebugger::dump_ram() {
 //------------------------------------------------------------------------------
 
 void SLDebugger::dump_flash() {
+
+  Reg_FLASH_STATR s  = get_mem32(ADDR_FLASH_STATR);
+  Reg_FLASH_CTLR c   = get_mem32(ADDR_FLASH_CTLR);
+  Reg_FLASH_OBR o    = get_mem32(ADDR_FLASH_OBR);
+  uint32_t flash_wpr = get_mem32(ADDR_FLASH_WPR);
+
   uint32_t temp[256];
-
-  Reg_FLASH_STATR s;
-  Reg_FLASH_CTLR c;
-  Reg_FLASH_OBR o;
-  uint32_t flash_wpr = 0;
-
-  //get_mem32p(ADDR_FLASH_WPR, &flash_wpr);
-  flash_wpr = get_mem32(ADDR_FLASH_WPR);
-
-  s.raw = get_mem32(ADDR_FLASH_STATR);
-  //get_mem32p(ADDR_FLASH_STATR, &s);
-
-
-  get_mem32p(ADDR_FLASH_CTLR, &c);
-  get_mem32p(ADDR_FLASH_OBR, &o);
   get_block32(0x08000000, temp, 256);
 
   print("flash_wpr 0x%08x\n", flash_wpr);

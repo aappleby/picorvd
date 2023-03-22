@@ -12,7 +12,6 @@ struct SLDebugger {
 
   // Raw access to debug registers
   uint32_t get_dbg (uint8_t addr);
-  void     get_dbgp(uint8_t addr, void* out);
   void     put_dbg (uint8_t addr, uint32_t data);
 
   void     load_prog(uint32_t* prog);
@@ -25,7 +24,6 @@ struct SLDebugger {
 
   void     put_mem16(uint32_t addr, uint16_t data);
   void     put_mem32(uint32_t addr, uint32_t data);
-  void     put_mem32p(uint32_t addr, void* data);
   void     put_block32(uint32_t addr, void* data, int size_dwords);
 
   uint32_t get_gpr(int index);
@@ -39,13 +37,13 @@ struct SLDebugger {
 
   //----------
 
-  Reg_DCSR get_dcsr() { Reg_DCSR r; get_csrp(0x7B0, &r); return r; }
-  uint32_t get_dpc()  { uint32_t r; get_csrp(0x7B1, &r); return r; }
-  uint32_t get_ds0()  { uint32_t r; get_csrp(0x7B2, &r); return r; }
-  uint32_t get_ds1()  { uint32_t r; get_csrp(0x7B3, &r); return r; }
+  Reg_DCSR get_dcsr() { return get_csr(0x7B0); }
+  uint32_t get_dpc()  { return get_csr(0x7B1); }
+  uint32_t get_ds0()  { return get_csr(0x7B2); }
+  uint32_t get_ds1()  { return get_csr(0x7B3); }
 
-  Reg_DMSTATUS   get_dmstatus() { Reg_DMSTATUS r;   r.raw = get_dbg(ADDR_DMSTATUS);   return r; }
-  Reg_ABSTRACTCS get_abstatus() { Reg_ABSTRACTCS r; r.raw = get_dbg(ADDR_ABSTRACTCS); return r; }
+  Reg_DMSTATUS   get_dmstatus() { return get_dbg(ADDR_DMSTATUS); }
+  Reg_ABSTRACTCS get_abstatus() { return get_dbg(ADDR_ABSTRACTCS); }
 
   //----------
 

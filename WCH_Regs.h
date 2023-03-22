@@ -56,6 +56,9 @@ const uint32_t ADDR_FLASH_BKEYR = 0x40022028;
 //------------------------------------------------------------------------------
 
 struct Reg_CPBR {
+  Reg_CPBR(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t TDIV        : 2;
@@ -88,6 +91,9 @@ static_assert(sizeof(Reg_CPBR) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_CFGR {
+  Reg_CFGR(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t TDIVCFG   : 2;
@@ -120,6 +126,9 @@ static_assert(sizeof(Reg_CFGR) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_SHDWCFGR {
+  Reg_SHDWCFGR(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t TDIVCFG   : 2;
@@ -152,6 +161,9 @@ static_assert(sizeof(Reg_SHDWCFGR) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_DMCONTROL {
+  Reg_DMCONTROL(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t DMACTIVE     : 1;
@@ -179,6 +191,9 @@ static_assert(sizeof(Reg_DMCONTROL) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_DMSTATUS {
+  Reg_DMSTATUS(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t VERSION       : 4;
@@ -221,6 +236,9 @@ static_assert(sizeof(Reg_DMSTATUS) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_HARTINFO {
+  Reg_HARTINFO(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t DATAADDR   : 12;
@@ -248,6 +266,9 @@ static_assert(sizeof(Reg_HARTINFO) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_ABSTRACTCS {
+  Reg_ABSTRACTCS(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t DATACOUNT   : 4;
@@ -275,6 +296,9 @@ static_assert(sizeof(Reg_ABSTRACTCS) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_COMMAND {
+  Reg_COMMAND(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t REGNO      : 16;
@@ -305,6 +329,9 @@ static_assert(sizeof(Reg_COMMAND) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_AUTOCMD {
+  Reg_AUTOCMD(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t AUTOEXECDATA : 12;
@@ -325,6 +352,9 @@ static_assert(sizeof(Reg_AUTOCMD) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_HALTSUM0 {
+  Reg_HALTSUM0(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t HALTSUM0 : 1;
@@ -343,6 +373,9 @@ static_assert(sizeof(Reg_HALTSUM0) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_DCSR {
+  Reg_DCSR(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t PRV       : 2;
@@ -378,6 +411,9 @@ static_assert(sizeof(Reg_DCSR) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_DBGMCU_CR {
+  Reg_DBGMCU_CR(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t IWDG_STOP : 1;
@@ -403,6 +439,9 @@ static_assert(sizeof(Reg_DBGMCU_CR) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_FLASH_ACTLR {
+  Reg_FLASH_ACTLR(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t LATENCY : 2;
@@ -416,6 +455,9 @@ static_assert(sizeof(Reg_FLASH_ACTLR) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_FLASH_STATR {
+  Reg_FLASH_STATR(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t BUSY      : 1; // True if flash busy
@@ -460,6 +502,9 @@ const auto BIT_CTLR_BUFLOAD = (1 << 18);
 const auto BIT_CTLR_BUFRST  = (1 << 19);
 
 struct Reg_FLASH_CTLR {
+  Reg_FLASH_CTLR(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t PG      : 1; // Program enable
@@ -512,6 +557,9 @@ static_assert(sizeof(Reg_FLASH_CTLR) == 4);
 //------------------------------------------------------------------------------
 
 struct Reg_FLASH_OBR {
+  Reg_FLASH_OBR(uint32_t raw = 0) { this->raw = raw; }
+  operator uint32_t() const { return raw; }
+
   union {
     struct {
       uint32_t OBERR       : 1; // Unlock OB error
