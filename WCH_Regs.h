@@ -178,12 +178,14 @@ struct Reg_DMCONTROL {
   };
 
   void dump(cb_printf print) {
+    print("Reg_DMCONTROL\n");
     print("  raw           = 0x%08x\n", raw);
     print("  DMACTIVE      = %d\n", DMACTIVE);
     print("  NDMRESET      = %d\n", NDMRESET);
     print("  ACKHAVERESET  = %d\n", ACKHAVERESET);
     print("  RESUMEREQ     = %d\n", RESUMEREQ);
     print("  HALTREQ       = %d\n", HALTREQ);
+    print("\n");    
   }
 };
 static_assert(sizeof(Reg_DMCONTROL) == 4);

@@ -10,19 +10,18 @@ struct SLDebugger {
   void halt();
   void unhalt(bool reset);
 
+  void     save_regs();
+  void     load_regs();
+
   // Raw access to debug registers
   uint32_t get_dbg (uint8_t addr);
   void     put_dbg (uint8_t addr, uint32_t data);
 
   void     load_prog(uint32_t* prog);
-  void     save_regs();
-  void     load_regs();
 
   uint32_t get_mem32(uint32_t addr);
-  void     get_mem32p(uint32_t addr, void* data);
   void     get_block32(uint32_t addr, void* data, int size_dwords);
 
-  void     put_mem16(uint32_t addr, uint16_t data);
   void     put_mem32(uint32_t addr, uint32_t data);
   void     put_block32(uint32_t addr, void* data, int size_dwords);
 

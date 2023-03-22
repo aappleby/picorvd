@@ -189,21 +189,6 @@ void SLDebugger::put_mem32(uint32_t addr, uint32_t data) {
   put_dbg(ADDR_COMMAND, cmd_runprog);
 }
 
-void SLDebugger::get_mem32p(uint32_t addr, void* data) {
-  load_prog(prog_get32);
-  put_dbg(ADDR_DATA0,   0xDEADBEEF);
-  put_dbg(ADDR_DATA1,   addr);
-  put_dbg(ADDR_COMMAND, cmd_runprog);
-  *(uint32_t*)data = get_dbg(ADDR_DATA0);
-}
-
-void SLDebugger::put_mem16(uint32_t addr, uint16_t data) {
-  load_prog(prog_put16);
-  put_dbg(ADDR_DATA0,   data);
-  put_dbg(ADDR_DATA1,   addr);
-  put_dbg(ADDR_COMMAND, cmd_runprog);
-}
-
 //-----------------------------------------------------------------------------
 
 void SLDebugger::get_block32(uint32_t addr, void* data, int size_dwords) {
@@ -267,7 +252,7 @@ void SLDebugger::put_block32(uint32_t addr, void* data, int size_dwords) {
 // Seems to work
 
 uint32_t SLDebugger::get_gpr(int index) {
-  Reg_COMMAND cmd = {0};
+  Reg_COMMAND cmd;
   cmd.REGNO      = 0x1000 | index;
   cmd.WRITE      = 0;
   cmd.TRANSFER   = 1;
@@ -276,12 +261,12 @@ uint32_t SLDebugger::get_gpr(int index) {
   cmd.AARSIZE    = 2;
   cmd.CMDTYPE    = 0;
 
-  put_dbg(ADDR_COMMAND, cmd.raw);
+  put_dbg(ADDR_COMMAND, cmd);
   return get_dbg(ADDR_DATA0);
 }
 
 void SLDebugger::put_gpr(int index, uint32_t gpr) {
-  Reg_COMMAND cmd = {0};
+  Reg_COMMAND cmd;
   cmd.REGNO      = 0x1000 | index;
   cmd.WRITE      = 1;
   cmd.TRANSFER   = 1;
@@ -291,13 +276,13 @@ void SLDebugger::put_gpr(int index, uint32_t gpr) {
   cmd.CMDTYPE    = 0;
 
   put_dbg(ADDR_DATA0,   gpr);
-  put_dbg(ADDR_COMMAND, cmd.raw);
+  put_dbg(ADDR_COMMAND, cmd);
 }
 
 //-----------------------------------------------------------------------------
 
 void SLDebugger::get_csrp(int index, void* data) {
-  Reg_COMMAND cmd = {0};
+  Reg_COMMAND cmd;
   cmd.REGNO      = index;
   cmd.WRITE      = 0;
   cmd.TRANSFER   = 1;
@@ -306,12 +291,12 @@ void SLDebugger::get_csrp(int index, void* data) {
   cmd.AARSIZE    = 2;
   cmd.CMDTYPE    = 0;
 
-  put_dbg(ADDR_COMMAND, cmd.raw);
+  put_dbg(ADDR_COMMAND, cmd);
   *(uint32_t*)data = get_dbg(ADDR_DATA0);
 }
 
 void SLDebugger::put_csrp(int index, void* data) {
-  Reg_COMMAND cmd = {0};
+  Reg_COMMAND cmd;
   cmd.REGNO      = index;
   cmd.WRITE      = 1;
   cmd.TRANSFER   = 1;
@@ -321,11 +306,11 @@ void SLDebugger::put_csrp(int index, void* data) {
   cmd.CMDTYPE    = 0;
 
   put_dbg(ADDR_DATA0, *(uint32_t*)data);
-  put_dbg(ADDR_COMMAND, cmd.raw);
+  put_dbg(ADDR_COMMAND, cmd);
 }
 
 uint32_t SLDebugger::get_csr(int index) {
-  Reg_COMMAND cmd = {0};
+  Reg_COMMAND cmd;
   cmd.REGNO      = index;
   cmd.WRITE      = 0;
   cmd.TRANSFER   = 1;
@@ -334,12 +319,12 @@ uint32_t SLDebugger::get_csr(int index) {
   cmd.AARSIZE    = 2;
   cmd.CMDTYPE    = 0;
 
-  put_dbg(ADDR_COMMAND, cmd.raw);
+  put_dbg(ADDR_COMMAND, cmd);
   return get_dbg(ADDR_DATA0);
 }
 
 void SLDebugger::put_csr(int index, uint32_t data) {
-  Reg_COMMAND cmd = {0};
+  Reg_COMMAND cmd;
   cmd.REGNO      = index;
   cmd.WRITE      = 1;
   cmd.TRANSFER   = 1;
@@ -385,8 +370,7 @@ bool SLDebugger::test_mem() {
     }
   }
 
-  Reg_ABSTRACTCS reg_abstractcs;
-  reg_abstractcs.raw = get_dbg(ADDR_ABSTRACTCS);
+  Reg_ABSTRACTCS reg_abstractcs = get_dbg(ADDR_ABSTRACTCS);
   if (reg_abstractcs.CMDER) {
     print("Memory test fail, CMDER=%d\n", reg_abstractcs.CMDER);
     fail = true;
@@ -399,41 +383,27 @@ bool SLDebugger::test_mem() {
 //-----------------------------------------------------------------------------
 
 void SLDebugger::print_status() {
-  Reg_CPBR       reg_cpbr;
-  Reg_CFGR       reg_cfgr;
-  Reg_SHDWCFGR   reg_shdwcfgr;
-  Reg_DMCONTROL  reg_dmctrl;
-  Reg_DMSTATUS   reg_dmstatus;
-  Reg_ABSTRACTCS reg_abstractcs;
-
-  Reg_DCSR dcsr;
-  uint32_t dpc  = 0xDEADBEEF;
-  uint32_t ds0  = 0xDEADBEEF;
-  uint32_t ds1  = 0xDEADBEEF;
+  //Reg_CPBR       reg_cpbr       = get_dbg(ADDR_CPBR);
+  //Reg_CFGR       reg_cfgr       = get_dbg(ADDR_CFGR);
+  //Reg_SHDWCFGR   reg_shdwcfgr   = get_dbg(ADDR_SHDWCFGR);
 
   //----------
 
-  reg_cpbr.raw       = get_dbg(ADDR_CPBR);
-  reg_cfgr.raw       = get_dbg(ADDR_CFGR);
-  reg_shdwcfgr.raw   = get_dbg(ADDR_SHDWCFGR);
-  reg_dmctrl.raw     = get_dbg(ADDR_DMCONTROL);
-  reg_dmstatus.raw   = get_dbg(ADDR_DMSTATUS);
-  reg_abstractcs.raw = get_dbg(ADDR_ABSTRACTCS);
-
-  get_csrp(0x7B0, &dcsr);
-  get_csrp(0x7B1, &dpc);
-  get_csrp(0x7B2, &ds0);
-  get_csrp(0x7B3, &ds1);
-
-  //----------
-
-  print("reg_dmcontrol\n");  reg_dmctrl.dump(print);     print("\n");
+  Reg_DMCONTROL(get_dbg(ADDR_DMCONTROL)).dump(print);
+  
+  Reg_DMSTATUS   reg_dmstatus   = get_dbg(ADDR_DMSTATUS);
   print("reg_dmstatus\n");   reg_dmstatus.dump(print);   print("\n");
+  
+  Reg_ABSTRACTCS reg_abstractcs = get_dbg(ADDR_ABSTRACTCS);
   print("reg_abstractcs\n"); reg_abstractcs.dump(print); print("\n");
+  
+  Reg_DCSR dcsr = get_csr(0x7B0);
   print("reg_dcsr\n");       dcsr.dump(print);           print("\n");
-  print("dpc  0x%08x\n", dpc);
-  print("ds0  0x%08x\n", ds0);
-  print("ds1  0x%08x\n", ds1);
+  
+  print("dpc  0x%08x\n", get_csr(0x7B1));
+  print("ds0  0x%08x\n", get_csr(0x7B2));
+  print("ds1  0x%08x\n", get_csr(0x7B3));
+  
   print("\n");
 }
 
