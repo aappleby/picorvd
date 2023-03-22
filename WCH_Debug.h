@@ -9,45 +9,53 @@ struct SLDebugger {
   void reset();
   void halt();
   void unhalt(bool reset);
+  void clear_err();
 
-  void     save_regs();
-  void     load_regs();
+  // Debugger register access
+  uint32_t get_dbg(uint8_t addr);
+  void     put_dbg(uint8_t addr, uint32_t data);
 
-  // Raw access to debug registers
-  uint32_t get_dbg (uint8_t addr);
-  void     put_dbg (uint8_t addr, uint32_t data);
-
-  void     load_prog(uint32_t* prog);
-
-  uint32_t get_mem32(uint32_t addr);
-  void     get_block32(uint32_t addr, void* data, int size_dwords);
-
-  void     put_mem32(uint32_t addr, uint32_t data);
-  void     put_block32(uint32_t addr, void* data, int size_dwords);
-
+  // CPU register access
   uint32_t get_gpr(int index);
   void     put_gpr(int index, uint32_t gpr);
 
+  // CSR access
   uint32_t get_csr(int index);
   void     put_csr(int index, uint32_t csr);
 
-  void     get_csrp(int index, void* data);
-  void     put_csrp(int index, void* csr);
+  // Word-size memory access
+  uint32_t get_mem(uint32_t addr);
+  void     put_mem(uint32_t addr, uint32_t data);
 
-  //----------
+  // Bulk memory access
+  void get_block(uint32_t addr, void* data, int size_dwords);
+  void put_block(uint32_t addr, void* data, int size_dwords);
 
-  Reg_DCSR get_dcsr() { return get_csr(0x7B0); }
-  uint32_t get_dpc()  { return get_csr(0x7B1); }
-  uint32_t get_ds0()  { return get_csr(0x7B2); }
-  uint32_t get_ds1()  { return get_csr(0x7B3); }
+  // Flash erase
+  void wipe_64  (uint32_t addr);
+  void wipe_1024(uint32_t addr);
+  void wipe_chip();
 
-  Reg_DMSTATUS   get_dmstatus() { return get_dbg(ADDR_DMSTATUS); }
-  Reg_ABSTRACTCS get_abstatus() { return get_dbg(ADDR_ABSTRACTCS); }
+  // Flash write
+  void write_flash(uint32_t dst_addr, uint32_t* data, int size_dwords);
 
-  //----------
-
-  bool test_mem();
+  // Step/breakpoints
   void step();
+
+  // Test stuff
+  void print_status();
+  void dump_ram();
+  void dump_flash();
+  bool test_mem();
+
+  //----------------------------------------
+
+private:
+
+  void run_command(uint32_t addr, uint32_t ctl1, uint32_t ctl2);
+  void save_regs();
+  void load_regs();
+  void load_prog(uint32_t* prog);
 
   int swd_pin = -1;
   uint32_t* active_prog = nullptr;
@@ -56,16 +64,6 @@ struct SLDebugger {
   uint32_t regfile[32];
 
   cb_printf print = nullptr;
-
-  void wipe_64   (uint32_t addr);
-  void wipe_1024 (uint32_t addr);
-  void wipe_chip ();
-
-  void run_command(uint32_t addr, uint32_t ctl1, uint32_t ctl2);
-  void print_status();
-  void dump_ram();
-  void dump_flash();
-  void write_flash(uint32_t dst_addr, uint32_t* data, int size_dwords);
 };
 
 //------------------------------------------------------------------------------

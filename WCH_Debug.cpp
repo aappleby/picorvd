@@ -71,7 +71,8 @@ void SLDebugger::reset() {
 void SLDebugger::halt() {
   // Halt CPU
   put_dbg(ADDR_DMCONTROL, 0x80000001);
-  while (!get_dmstatus().ALLHALTED);
+
+  while (!Reg_DMSTATUS(get_dbg(ADDR_DMSTATUS)).ALLHALTED);
   put_dbg(ADDR_DMCONTROL, 0x00000001);
 
   // Stop timers and watchdogs
@@ -80,10 +81,10 @@ void SLDebugger::halt() {
   put_dbg(ADDR_COMMAND,   0x002307C0);
 
   // Unlock flash
-  put_mem32(ADDR_FLASH_KEYR, 0x45670123);
-  put_mem32(ADDR_FLASH_KEYR, 0xCDEF89AB);
-  put_mem32(ADDR_FLASH_MKEYR, 0x45670123);
-  put_mem32(ADDR_FLASH_MKEYR, 0xCDEF89AB);
+  put_mem(ADDR_FLASH_KEYR, 0x45670123);
+  put_mem(ADDR_FLASH_KEYR, 0xCDEF89AB);
+  put_mem(ADDR_FLASH_MKEYR, 0x45670123);
+  put_mem(ADDR_FLASH_MKEYR, 0xCDEF89AB);
 
   // Clear error status
   put_dbg(ADDR_ABSTRACTCS, 0x00000700);
@@ -98,7 +99,7 @@ void SLDebugger::unhalt(bool reset) {
   if (reset) {
     // Reset CPU
     put_dbg(ADDR_DMCONTROL, 0x00000003);
-    while(!get_dmstatus().ALLHAVERESET); 
+    while(!Reg_DMSTATUS(get_dbg(ADDR_DMSTATUS)).ALLHAVERESET); 
   }
   else {
     // Reload registers if we're not resetting the CPU
@@ -107,10 +108,16 @@ void SLDebugger::unhalt(bool reset) {
 
   // Clear reset and resume CPU
   put_dbg(ADDR_DMCONTROL, 0x50000001);
-  while (get_dmstatus().ANYHALTED);
+  while (Reg_DMSTATUS(get_dbg(ADDR_DMSTATUS)).ANYHALTED);
 
   // Clear ackresume
   put_dbg(ADDR_DMCONTROL, 0x00000001);
+}
+
+//-----------------------------------------------------------------------------
+
+void SLDebugger::clear_err() {
+  put_dbg(ADDR_ABSTRACTCS, 0x00000700);
 }
 
 //-----------------------------------------------------------------------------
@@ -120,6 +127,8 @@ uint32_t SLDebugger::get_dbg(uint8_t addr) {
   pio_sm_put_blocking(pio0, 0, addr);
   return pio_sm_get_blocking(pio0, 0);
 }
+
+//-----------------------------------------------------------------------------
 
 void SLDebugger::put_dbg(uint8_t addr, uint32_t data) {
   addr = ((~addr) << 1) | 0;
@@ -141,49 +150,40 @@ void SLDebugger::load_prog(uint32_t* prog) {
 
 //-----------------------------------------------------------------------------
 
-static uint32_t prog_get32[8] = {
-  0xe0000537, // lui  a0, 0xE0000
-  0x0f852583, // lw   a1, 0x0F8(a0)
-  0x0005a583, // lw   a1, 0x000(a1)
-  0x0eb52a23, // sw   a1, 0x0F4(a0)
-  0x00100073, // ebreak
-  0x00100073, // ebreak
-  0x00100073, // ebreak
-  0x00100073, // ebreak
-};
+uint32_t SLDebugger::get_mem(uint32_t addr) {
+  static uint32_t prog_get_mem[8] = {
+    0xe0000537, // lui  a0, 0xE0000
+    0x0f852583, // lw   a1, 0x0F8(a0)
+    0x0005a583, // lw   a1, 0x000(a1)
+    0x0eb52a23, // sw   a1, 0x0F4(a0)
+    0x00100073, // ebreak
+    0x00100073, // ebreak
+    0x00100073, // ebreak
+    0x00100073, // ebreak
+  };
 
-static uint32_t prog_put32[8] = {
-  0xe0000537, // lui  a0, 0xE0000
-  0x0f852583, // lw   a1, 0x0F8(a0)
-  0x0f452503, // lw   a0, 0x0F4(a0)
-  0x00a5a023, // sw   a0, 0x000(a1)
-  0x00100073, // ebreak
-  0x00100073, // ebreak
-  0x00100073, // ebreak
-  0x00100073, // ebreak
-};
-
-static uint32_t prog_put16[8] = {
-  0xe0000537, // lui  a0, 0xE0000
-  0x0f852583, // lw   a1, 0x0F8(a0)
-  0x0f452503, // lw   a0, 0x0F4(a0)
-  0x00a59023, // sh   a0, 0x000(a1)
-  0x00100073, // ebreak
-  0x00100073, // ebreak
-  0x00100073, // ebreak
-  0x00100073, // ebreak
-};
-
-uint32_t SLDebugger::get_mem32(uint32_t addr) {
-  load_prog(prog_get32);
+  load_prog(prog_get_mem);
   put_dbg(ADDR_DATA0,   0xDEADBEEF);
   put_dbg(ADDR_DATA1,   addr);
   put_dbg(ADDR_COMMAND, cmd_runprog);
   return get_dbg(ADDR_DATA0);
 }
 
-void SLDebugger::put_mem32(uint32_t addr, uint32_t data) {
-  load_prog(prog_put32);
+//-----------------------------------------------------------------------------
+
+void SLDebugger::put_mem(uint32_t addr, uint32_t data) {
+  static uint32_t prog_put_mem[8] = {
+    0xe0000537, // lui  a0, 0xE0000
+    0x0f852583, // lw   a1, 0x0F8(a0)
+    0x0f452503, // lw   a0, 0x0F4(a0)
+    0x00a5a023, // sw   a0, 0x000(a1)
+    0x00100073, // ebreak
+    0x00100073, // ebreak
+    0x00100073, // ebreak
+    0x00100073, // ebreak
+  };
+
+  load_prog(prog_put_mem);
   put_dbg(ADDR_DATA0,   data);
   put_dbg(ADDR_DATA1,   addr);
   put_dbg(ADDR_COMMAND, cmd_runprog);
@@ -191,8 +191,8 @@ void SLDebugger::put_mem32(uint32_t addr, uint32_t data) {
 
 //-----------------------------------------------------------------------------
 
-void SLDebugger::get_block32(uint32_t addr, void* data, int size_dwords) {
-  static uint32_t prog_getblock32[8] = {
+void SLDebugger::get_block(uint32_t addr, void* data, int size_dwords) {
+  static uint32_t prog_get_block[8] = {
     0xe0000537, // lui    a0, 0xE0000
     0x0f852583, // lw     a1, 0x0F8(a0) // data0 = *data1;
     0x0005a583, // lw     a1, 0x000(a1)
@@ -205,7 +205,7 @@ void SLDebugger::get_block32(uint32_t addr, void* data, int size_dwords) {
 
   uint32_t* cursor = (uint32_t*)data;
 
-  load_prog(prog_getblock32);
+  load_prog(prog_get_block);
   put_dbg(ADDR_DATA1,   addr);
   put_dbg(ADDR_AUTOCMD, 0x00000001);
   put_dbg(ADDR_COMMAND, cmd_runprog);
@@ -218,8 +218,8 @@ void SLDebugger::get_block32(uint32_t addr, void* data, int size_dwords) {
 
 //-----------------------------------------------------------------------------
 
-void SLDebugger::put_block32(uint32_t addr, void* data, int size_dwords) {
-  static uint32_t prog_putblock32[8] = {
+void SLDebugger::put_block(uint32_t addr, void* data, int size_dwords) {
+  static uint32_t prog_put_block[8] = {
     0xe0000537, // lui    a0, 0xE0000
     0x0f852583, // lw     a1, 0x0F8(a0)
     0x0f452503, // lw     a0, 0x0F4(a0)
@@ -234,7 +234,7 @@ void SLDebugger::put_block32(uint32_t addr, void* data, int size_dwords) {
   uint32_t a0 = get_gpr(10);
   uint32_t a1 = get_gpr(11);
 
-  load_prog(prog_putblock32);
+  load_prog(prog_put_block);
   put_dbg(ADDR_DATA0, *cursor++);
   put_dbg(ADDR_DATA1, addr);
   put_dbg(ADDR_AUTOCMD, 0x00000001);
@@ -249,7 +249,6 @@ void SLDebugger::put_block32(uint32_t addr, void* data, int size_dwords) {
 }
 
 //-----------------------------------------------------------------------------
-// Seems to work
 
 uint32_t SLDebugger::get_gpr(int index) {
   Reg_COMMAND cmd;
@@ -280,34 +279,6 @@ void SLDebugger::put_gpr(int index, uint32_t gpr) {
 }
 
 //-----------------------------------------------------------------------------
-
-void SLDebugger::get_csrp(int index, void* data) {
-  Reg_COMMAND cmd;
-  cmd.REGNO      = index;
-  cmd.WRITE      = 0;
-  cmd.TRANSFER   = 1;
-  cmd.POSTEXEC   = 0;
-  cmd.AARPOSTINC = 0;
-  cmd.AARSIZE    = 2;
-  cmd.CMDTYPE    = 0;
-
-  put_dbg(ADDR_COMMAND, cmd);
-  *(uint32_t*)data = get_dbg(ADDR_DATA0);
-}
-
-void SLDebugger::put_csrp(int index, void* data) {
-  Reg_COMMAND cmd;
-  cmd.REGNO      = index;
-  cmd.WRITE      = 1;
-  cmd.TRANSFER   = 1;
-  cmd.POSTEXEC   = 0;
-  cmd.AARPOSTINC = 0;
-  cmd.AARSIZE    = 2;
-  cmd.CMDTYPE    = 0;
-
-  put_dbg(ADDR_DATA0, *(uint32_t*)data);
-  put_dbg(ADDR_COMMAND, cmd);
-}
 
 uint32_t SLDebugger::get_csr(int index) {
   Reg_COMMAND cmd;
@@ -340,62 +311,14 @@ void SLDebugger::put_csr(int index, uint32_t data) {
 //------------------------------------------------------------------------------
 
 void SLDebugger::step() {
-  Reg_DCSR dcsr = get_dcsr();
+  Reg_DCSR dcsr = get_csr(CSR_DCSR);
   dcsr.STEP = 1;
-  put_gpr(0x7B0, dcsr);
+  put_csr(CSR_DCSR, dcsr);
+
   put_dbg(ADDR_DMCONTROL, 0x40000001);
-  while (get_dmstatus().ANYHALTED);
+  while (Reg_DMSTATUS(get_dbg(ADDR_DMSTATUS)).ANYHALTED);
   put_dbg(ADDR_DMCONTROL, 0x80000001);
-  while (!get_dmstatus().ALLHALTED);
-}
-
-//-----------------------------------------------------------------------------
-
-bool SLDebugger::test_mem() {
-  uint32_t base = 0x20000000;
-  int size_dwords = 512;
-
-  uint32_t addr;
-  for (int i = 0; i < size_dwords; i++) {
-    addr = base + (4 * i);
-    put_mem32(addr, 0xBEEF0000 + i);
-  }
-  bool fail = false;
-  for (int i = 0; i < size_dwords; i++) {
-    addr = base + (4 * i);
-    uint32_t data = get_mem32(addr);
-    if (data != 0xBEEF0000 + i) {
-      print("Memory test fail at 0x%08x : expected 0x%08x, got 0x%08x\n", addr, 0xBEEF0000 + i, data);
-      fail = true;
-    }
-  }
-
-  Reg_ABSTRACTCS reg_abstractcs = get_dbg(ADDR_ABSTRACTCS);
-  if (reg_abstractcs.CMDER) {
-    print("Memory test fail, CMDER=%d\n", reg_abstractcs.CMDER);
-    fail = true;
-  }
-
-  //if (!fail) print("Memory test pass!\n");
-  return fail;
-}
-
-//-----------------------------------------------------------------------------
-
-void SLDebugger::print_status() {
-  Reg_CPBR      (get_dbg(ADDR_CPBR)).dump(print);
-  Reg_CFGR      (get_dbg(ADDR_CFGR)).dump(print);
-  Reg_SHDWCFGR  (get_dbg(ADDR_SHDWCFGR)).dump(print);
-  Reg_DMCONTROL (get_dbg(ADDR_DMCONTROL)).dump(print);
-  Reg_DMSTATUS  (get_dbg(ADDR_DMSTATUS)).dump(print);
-  Reg_ABSTRACTCS(get_dbg(ADDR_ABSTRACTCS)).dump(print);
-  Reg_DCSR      (get_csr(0x7B0)).dump(print);
-  
-  print("dpc  0x%08x\n", get_csr(0x7B1));
-  print("ds0  0x%08x\n", get_csr(0x7B2));
-  print("ds1  0x%08x\n", get_csr(0x7B3));
-  
-  print("\n");
+  while (!Reg_DMSTATUS(get_dbg(ADDR_DMSTATUS)).ALLHALTED);
 }
 
 //------------------------------------------------------------------------------
@@ -404,9 +327,12 @@ uint16_t prog_run_command[16] = {
   0xc94c, // sw      a1,20(a0)
   0xc910, // sw      a2,16(a0)
   0xc914, // sw      a3,16(a0)
+  
+  // waitloop:
   0x455c, // lw      a5,12(a0)
   0x8b85, // andi    a5,a5,1
-  0xfff5, // bnez    a5,17c <_Z14do_flash_thingRV9Reg_FLASHPvmm+0x6>
+  0xfff5, // bnez    a5, <waitloop>
+
   0x2823, // sw      zero,16(a0)
   0x0005, //
   0x9002, // ebreak
@@ -445,41 +371,41 @@ void SLDebugger::wipe_chip() {
 //------------------------------------------------------------------------------
 
 uint16_t prog_write_incremental[16] = {
-  // copy word and trigger BUFLOAD
+  // Copy word and trigger BUFLOAD
   0x4180, // lw      s0,0(a1)
   0xc200, // sw      s0,0(a2)
   0xc914, // sw      a3,16(a0)
 
-  // wait for ack - this seems to be required now....?
+  // waitloop1: Busywait for copy to complete - this seems to be required now?
   0x4540, // lw      s0,12(a0)
   0x8805, // andi    s0,s0,1
-  0xfc75, // bnez    s0,15a <waitloop1>
+  0xfc75, // bnez    s0, <waitloop1>
 
-  // advance dest pointer and trigger START if we ended a page
+  // Advance dest pointer and trigger START if we ended a page
   0x0611, // addi    a2,a2,4
   0x7413, // andi    s0,a2,63
   0x03f6, //
-  0xe419, // bnez    s0,174 <end>
+  0xe419, // bnez    s0, <end>
   0xc918, // sw      a4,16(a0)
 
-  // wait for write to complete
+  // waitloop2: Busywait for page write to complete
   0x4540, // lw      s0,12(a0)
   0x8805, // andi    s0,s0,1
-  0xfc75, // bnez    s0,16a <waitloop2>
+  0xfc75, // bnez    s0, <waitloop2>
 
-  // reset buffer, don't need to wait for BUSY as it'll be reset before we can
-  // upload another dword
+  // Reset buffer, don't need busywait as it'll complete before we send the
+  // next dword.
   0xc91c, // sw      a5,16(a0)
 
-  // update address
+  // Update page address
   0xc950, // sw      a2,20(a0)
 };
 
 //------------------------------------------------------------------------------
 
 void SLDebugger::write_flash(uint32_t dst_addr, uint32_t* data, int size_dwords) {
-  put_mem32(ADDR_FLASH_ADDR, dst_addr);
-  put_mem32(ADDR_FLASH_CTLR, BIT_CTLR_FTPG | BIT_CTLR_BUFRST);
+  put_mem(ADDR_FLASH_ADDR, dst_addr);
+  put_mem(ADDR_FLASH_CTLR, BIT_CTLR_FTPG | BIT_CTLR_BUFRST);
 
   load_prog((uint32_t*)prog_write_incremental);
   put_gpr(10, 0x40022000); // flash base
@@ -493,6 +419,10 @@ void SLDebugger::write_flash(uint32_t dst_addr, uint32_t* data, int size_dwords)
   int page_count = (size_dwords + 15) / 16;
   int counter = 0;
 
+  // Start feeding dwords to prog_write_incremental. The busy-wait loops above
+  // will complete before we finish sending the next word, except at the end
+  // of a page when it takes ~3 msec to finish the write.
+
   for (int page = 0; page < page_count; page++) {
     for (int i = 0; i < 16; i++) {
       int index = page * 16 + i;
@@ -505,11 +435,31 @@ void SLDebugger::write_flash(uint32_t dst_addr, uint32_t* data, int size_dwords)
         first_word = false;
       }
     }
-    // Wait for write to complete after each page.
-    while(get_abstatus().BUSY);
+
+    // Sychronize with prog_write_incremental so we don't send another dword
+    // until the page is done writing.
+    while(Reg_ABSTRACTCS(get_dbg(ADDR_ABSTRACTCS)).BUSY);
   }
 
-  put_mem32(ADDR_FLASH_CTLR, 0);
+  put_mem(ADDR_FLASH_CTLR, 0);
+}
+
+//-----------------------------------------------------------------------------
+
+void SLDebugger::print_status() {
+  Reg_CPBR      (get_dbg(ADDR_CPBR)).dump(print);
+  Reg_CFGR      (get_dbg(ADDR_CFGR)).dump(print);
+  Reg_SHDWCFGR  (get_dbg(ADDR_SHDWCFGR)).dump(print);
+  Reg_DMCONTROL (get_dbg(ADDR_DMCONTROL)).dump(print);
+  Reg_DMSTATUS  (get_dbg(ADDR_DMSTATUS)).dump(print);
+  Reg_ABSTRACTCS(get_dbg(ADDR_ABSTRACTCS)).dump(print);
+  Reg_DCSR      (get_csr(CSR_DCSR)).dump(print);
+  
+  print("dpc  0x%08x\n", get_csr(CSR_DPC));
+  print("ds0  0x%08x\n", get_csr(CSR_DS0));
+  print("ds1  0x%08x\n", get_csr(CSR_DS1));
+  
+  print("\n");
 }
 
 //------------------------------------------------------------------------------
@@ -517,7 +467,7 @@ void SLDebugger::write_flash(uint32_t dst_addr, uint32_t* data, int size_dwords)
 void SLDebugger::dump_ram() {
   uint32_t temp[512];
 
-  get_block32(0x20000000, temp, 512);
+  get_block(0x20000000, temp, 512);
 
   for (int y = 0; y < 32; y++) {
     for (int x = 0; x < 16; x++) {
@@ -530,19 +480,50 @@ void SLDebugger::dump_ram() {
 //------------------------------------------------------------------------------
 
 void SLDebugger::dump_flash() {
-  Reg_FLASH_STATR(get_mem32(ADDR_FLASH_STATR)).dump(print);
-  Reg_FLASH_CTLR(get_mem32(ADDR_FLASH_CTLR)).dump(print);
-  Reg_FLASH_OBR(get_mem32(ADDR_FLASH_OBR)).dump(print);
-  print("flash_wpr 0x%08x\n", get_mem32(ADDR_FLASH_WPR));
+  Reg_FLASH_STATR(get_mem(ADDR_FLASH_STATR)).dump(print);
+  Reg_FLASH_CTLR(get_mem(ADDR_FLASH_CTLR)).dump(print);
+  Reg_FLASH_OBR(get_mem(ADDR_FLASH_OBR)).dump(print);
+  print("flash_wpr 0x%08x\n", get_mem(ADDR_FLASH_WPR));
 
   uint32_t temp[256];
-  get_block32(0x08000000, temp, 256);
+  get_block(0x08000000, temp, 256);
   for (int y = 0; y < 16; y++) {
     for (int x = 0; x < 16; x++) {
       print("0x%08x ", temp[x + y * 16]);
     }
     print("\n");
   }
+}
+
+//-----------------------------------------------------------------------------
+
+bool SLDebugger::test_mem() {
+  uint32_t base = 0x20000000;
+  int size_dwords = 512;
+
+  uint32_t addr;
+  for (int i = 0; i < size_dwords; i++) {
+    addr = base + (4 * i);
+    put_mem(addr, 0xBEEF0000 + i);
+  }
+  bool fail = false;
+  for (int i = 0; i < size_dwords; i++) {
+    addr = base + (4 * i);
+    uint32_t data = get_mem(addr);
+    if (data != 0xBEEF0000 + i) {
+      print("Memory test fail at 0x%08x : expected 0x%08x, got 0x%08x\n", addr, 0xBEEF0000 + i, data);
+      fail = true;
+    }
+  }
+
+  Reg_ABSTRACTCS reg_abstractcs = get_dbg(ADDR_ABSTRACTCS);
+  if (reg_abstractcs.CMDER) {
+    print("Memory test fail, CMDER=%d\n", reg_abstractcs.CMDER);
+    fail = true;
+  }
+
+  //if (!fail) print("Memory test pass!\n");
+  return fail;
 }
 
 //------------------------------------------------------------------------------

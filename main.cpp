@@ -12,9 +12,9 @@ const uint SWD_PIN = 14;
 
 extern "C" {
   void stdio_usb_out_chars(const char *buf, int length);
-  int stdio_usb_in_chars(char *buf, int length);
+  int  stdio_usb_in_chars (char *buf, int length);
 
-  void uart_write_blocking (uart_inst_t *uart, const uint8_t *src, size_t len);
+  void uart_write_blocking(uart_inst_t *uart, const uint8_t *src, size_t len);
   void uart_read_blocking (uart_inst_t *uart, uint8_t *dst, size_t len);
 };
 
@@ -97,6 +97,7 @@ int main() {
   stdio_usb_init();
   while(!stdio_usb_connected());
 
+  // Enable non-USB serial port on gpio 0/1 for meta-debug output :D
   uart_init(uart0, 3000000);
   gpio_set_function(0, GPIO_FUNC_UART);
   gpio_set_function(1, GPIO_FUNC_UART);  
@@ -137,25 +138,17 @@ int main() {
 
     uint32_t time_a = time_us_32();
 
-    if (strcmp(command, "status") == 0)     sl.print_status();
-    if (strcmp(command, "dump_flash") == 0) sl.dump_flash();
-    if (strcmp(command, "wipe_chip") == 0)  sl.wipe_chip();
-    if (strcmp(command, "write_flash") == 0) {
-      sl.write_flash(0x08000000, (uint32_t*)blink_bin, blink_bin_len / 4);
-    }
-    if (strcmp(command, "unhalt") == 0) {
-      sl.unhalt(/*reset*/ true);
-    }
+    if (strcmp(command, "status") == 0)      sl.print_status();
+    if (strcmp(command, "dump_flash") == 0)  sl.dump_flash();
+    if (strcmp(command, "wipe_chip") == 0)   sl.wipe_chip();
+    if (strcmp(command, "write_flash") == 0) sl.write_flash(0x08000000, (uint32_t*)blink_bin, blink_bin_len / 4);
+    if (strcmp(command, "unhalt") == 0)      sl.unhalt(/*reset*/ true);
+    if (strcmp(command, "halt") == 0)        sl.halt();
 
-    if (strcmp(command, "halt") == 0) {
-      sl.halt();
-    }
-
-    {
-      int err = sl.get_abstatus().CMDER;
-      if (err) {
-        printf("CMDERR = %d\n", err);
-      }
+    int err = Reg_ABSTRACTCS(sl.get_dbg(ADDR_ABSTRACTCS)).CMDER;
+    if (err) {
+      printf("CMDERR = %d\n", err);
+      sl.clear_err();
     }
 
     uint32_t time_b = time_us_32();

@@ -53,6 +53,11 @@ const uint32_t ADDR_FLASH_WPR = 0x40022020;
 const uint32_t ADDR_FLASH_MKEYR = 0x40022024;
 const uint32_t ADDR_FLASH_BKEYR = 0x40022028;
 
+const uint32_t CSR_DCSR = 0x7B0;
+const uint32_t CSR_DPC  = 0x7B1;
+const uint32_t CSR_DS0  = 0x7B2;
+const uint32_t CSR_DS1  = 0x7B3;
+
 //------------------------------------------------------------------------------
 
 struct Reg_CPBR {
@@ -76,15 +81,14 @@ struct Reg_CPBR {
   };
 
   void dump(cb_printf print) {
-    print("Reg_CPBR\n");
-    print("  raw          = 0x%08x\n", raw);
-    print("  TDIV         = %d\n", TDIV);
-    print("  SOPN         = %d\n", SOPN);
-    print("  CHECKSTA     = %d\n", CHECKSTA);
-    print("  CMDEXTENSTA  = %d\n", CMDEXTENSTA);
-    print("  OUTSTA       = %d\n", OUTSTA);
-    print("  IOMODE       = %d\n", IOMODE);
-    print("  VERSION      = %d\n", VERSION);
+    print("Reg_CPBR        = 0x%08x\n", raw);
+    print("  TDIV          = %d\n", TDIV);
+    print("  SOPN          = %d\n", SOPN);
+    print("  CHECKSTA      = %d\n", CHECKSTA);
+    print("  CMDEXTENSTA   = %d\n", CMDEXTENSTA);
+    print("  OUTSTA        = %d\n", OUTSTA);
+    print("  IOMODE        = %d\n", IOMODE);
+    print("  VERSION       = %d\n", VERSION);
   }
 };
 static_assert(sizeof(Reg_CPBR) == 4);
@@ -112,15 +116,14 @@ struct Reg_CFGR {
   };
 
   void dump(cb_printf print) {
-    print("Reg_CFGR\n");
-    print("  raw          = 0x%08x\n", raw);
-    print("  TDIVCFG      = %d\n", TDIVCFG   );
-    print("  SOPNCFG      = %d\n", SOPNCFG   );
-    print("  CHECKEN      = %d\n", CHECKEN   );
-    print("  CMDEXTEN     = %d\n", CMDEXTEN  );
-    print("  OUTEN        = %d\n", OUTEN     );
-    print("  IOMODECFG    = %d\n", IOMODECFG );
-    print("  KEY          = 0x%x\n", KEY       );
+    print("Reg_CFGR        = 0x%08x\n", raw);
+    print("  TDIVCFG       = %d\n", TDIVCFG   );
+    print("  SOPNCFG       = %d\n", SOPNCFG   );
+    print("  CHECKEN       = %d\n", CHECKEN   );
+    print("  CMDEXTEN      = %d\n", CMDEXTEN  );
+    print("  OUTEN         = %d\n", OUTEN     );
+    print("  IOMODECFG     = %d\n", IOMODECFG );
+    print("  KEY           = 0x%x\n", KEY       );
   }
 };
 static_assert(sizeof(Reg_CFGR) == 4);
@@ -148,15 +151,14 @@ struct Reg_SHDWCFGR {
   };
 
   void dump(cb_printf print) {
-    print("Reg_SHDWCFGR\n");
-    print("  raw          = 0x%08x\n", raw);
-    print("  TDIVCFG      = %d\n", TDIVCFG   );
-    print("  SOPNCFG      = %d\n", SOPNCFG   );
-    print("  CHECKEN      = %d\n", CHECKEN   );
-    print("  CMDEXTEN     = %d\n", CMDEXTEN  );
-    print("  OUTEN        = %d\n", OUTEN     );
-    print("  IOMODECFG    = %d\n", IOMODECFG );
-    print("  KEY          = 0x%x\n", KEY       );
+    print("Reg_SHDWCFGR    = 0x%08x\n", raw);
+    print("  TDIVCFG       = %d\n", TDIVCFG   );
+    print("  SOPNCFG       = %d\n", SOPNCFG   );
+    print("  CHECKEN       = %d\n", CHECKEN   );
+    print("  CMDEXTEN      = %d\n", CMDEXTEN  );
+    print("  OUTEN         = %d\n", OUTEN     );
+    print("  IOMODECFG     = %d\n", IOMODECFG );
+    print("  KEY           = 0x%x\n", KEY       );
   }
 };
 static_assert(sizeof(Reg_SHDWCFGR) == 4);
@@ -181,8 +183,7 @@ struct Reg_DMCONTROL {
   };
 
   void dump(cb_printf print) {
-    print("Reg_DMCONTROL\n");
-    print("  raw           = 0x%08x\n", raw);
+    print("Reg_DMCONTROL   = 0x%08x\n", raw);
     print("  DMACTIVE      = %d\n", DMACTIVE);
     print("  NDMRESET      = %d\n", NDMRESET);
     print("  ACKHAVERESET  = %d\n", ACKHAVERESET);
@@ -220,8 +221,7 @@ struct Reg_DMSTATUS {
   };
 
   void dump(cb_printf print) {
-    print("Reg_DMSTATUS\n");
-    print("  raw           = 0x%08x\n", raw);
+    print("Reg_DMSTATUS    = 0x%08x\n", raw);
     print("  VERSION       = %d\n", VERSION       );
     print("  AUTHENTICATED = %d\n", AUTHENTICATED );
     print("  ANYHALTED     = %d\n", ANYHALTED     );
@@ -257,8 +257,7 @@ struct Reg_HARTINFO {
   };
 
   void dump(cb_printf print) {
-    print("Reg_HARTINFO\n");
-    print("  raw           = 0x%08x\n", raw);
+    print("Reg_HARTINFO    = 0x%08x\n", raw);
     print("  DATAADDR      = %d\n", DATAADDR  );
     print("  DATASIZE      = %d\n", DATASIZE  );
     print("  DATAACCESS    = %d\n", DATAACCESS);
@@ -290,8 +289,7 @@ struct Reg_ABSTRACTCS {
   };
 
   void dump(cb_printf print) {
-    print("Reg_ABSTRACTCS\n");
-    print("  raw           = 0x%08x\n", raw);
+    print("Reg_ABSTRACTCS  = 0x%08x\n", raw);
     print("  DATACOUNT     = %d\n", DATACOUNT  );
     print("  CMDER         = %d\n", CMDER      );
     print("  BUSY          = %d\n", BUSY       );
@@ -321,8 +319,7 @@ struct Reg_COMMAND {
   };
 
   void dump(cb_printf print) {
-    print("Reg_COMMAND\n");
-    print("  raw           = 0x%08x\n", raw);
+    print("Reg_COMMAND     = 0x%08x\n", raw);
     print("  REGNO         = 0x%x\n", REGNO      );
     print("  WRITE         = %d\n", WRITE      );
     print("  TRANSFER      = %d\n", TRANSFER   );
@@ -350,8 +347,7 @@ struct Reg_AUTOCMD {
   };
 
   void dump(cb_printf print) {
-    print("Reg_AUTOCMD\n");
-    print("  raw           = 0x%08x\n", raw);
+    print("Reg_AUTOCMD     = 0x%08x\n", raw);
     print("  AUTOEXECDATA  = %d\n", AUTOEXECDATA);
     print("  AUTOEXECPROG  = %d\n", AUTOEXECPROG);
   }
@@ -373,8 +369,7 @@ struct Reg_HALTSUM0 {
   };
 
   void dump(cb_printf print) {
-    print("Reg_HALTSUM0\n");
-    print("  raw           = 0x%08x\n", raw);
+    print("Reg_HALTSUM0    = 0x%08x\n", raw);
     print("  HALTSUM0      = %d\n", HALTSUM0);
   }
 };
@@ -405,8 +400,7 @@ struct Reg_DCSR {
   };
 
   void dump(cb_printf print) {
-    print("Reg_DCSR\n");
-    print("  raw           = 0x%08x\n", raw);
+    print("Reg_DCSR        = 0x%08x\n", raw);
     print("  PRV           = %d\n", PRV       );
     print("  STEP          = %d\n", STEP      );
     print("  CAUSE         = %d\n", CAUSE     );
@@ -438,8 +432,7 @@ struct Reg_DBGMCU_CR {
   };
 
   void dump(cb_printf print) {
-    print("Reg_DBGMCU_CR\n");
-    print("  raw         = 0x%08x\n", raw);
+    print("Reg_DBGMCU_CR = 0x%08x\n", raw);
     print("  IWDG_STOP   = %d\n", IWDG_STOP );
     print("  WWDG_STOP   = %d\n", WWDG_STOP );
     print("  TIM1_STOP   = %d\n", TIM1_STOP );
@@ -463,9 +456,8 @@ struct Reg_FLASH_ACTLR {
   };
 
   void dump(cb_printf print) {
-    print("Reg_FLASH_ACTLR\n");
-    print("  raw         = 0x%08x\n", raw);
-    print("  LATENCY     = %d\n", LATENCY);
+    print("Reg_FLASH_ACTLR = 0x%08x\n", raw);
+    print("  LATENCY       = %d\n", LATENCY);
   }
 };
 static_assert(sizeof(Reg_FLASH_ACTLR) == 4);
@@ -491,13 +483,12 @@ struct Reg_FLASH_STATR {
   };
 
   void dump(cb_printf print) {
-    print("Reg_FLASH_STATR\n");
-    print("  raw           = 0x%08x\n", raw);
-    print("  BUSY        = %d\n", BUSY     );
-    print("  WRPRTERR    = %d\n", WRPRTERR );
-    print("  EOP         = %d\n", EOP      );
-    print("  MODE        = %d\n", MODE     );
-    print("  BOOT_LOCK   = %d\n", BOOT_LOCK);
+    print("Reg_FLASH_STATR = 0x%08x\n", raw);
+    print("  BUSY          = %d\n", BUSY     );
+    print("  WRPRTERR      = %d\n", WRPRTERR );
+    print("  EOP           = %d\n", EOP      );
+    print("  MODE          = %d\n", MODE     );
+    print("  BOOT_LOCK     = %d\n", BOOT_LOCK);
   }
 };
 static_assert(sizeof(Reg_FLASH_STATR) == 4);
@@ -553,23 +544,22 @@ struct Reg_FLASH_CTLR {
   };
 
   void dump(cb_printf print) {
-    print("Reg_FLASH_CTLR\n");
-    print("  raw         = 0x%08x\n", raw);
-    print("  PG          = %d\n", PG      );
-    print("  PER         = %d\n", PER     );
-    print("  MER         = %d\n", MER     );
-    print("  OBG         = %d\n", OBG     );
-    print("  OBER        = %d\n", OBER    );
-    print("  STRT        = %d\n", STRT    );
-    print("  LOCK        = %d\n", LOCK    );
-    print("  OBWRE       = %d\n", OBWRE   );
-    print("  ERRIE       = %d\n", ERRIE   );
-    print("  EOPIE       = %d\n", EOPIE   );
-    print("  FLOCK       = %d\n", FLOCK   );
-    print("  FTPG        = %d\n", FTPG    );
-    print("  FTER        = %d\n", FTER    );
-    print("  BUFLOAD     = %d\n", BUFLOAD );
-    print("  BUFRST      = %d\n", BUFRST  );
+    print("Reg_FLASH_CTLR  = 0x%08x\n", raw);
+    print("  PG            = %d\n", PG      );
+    print("  PER           = %d\n", PER     );
+    print("  MER           = %d\n", MER     );
+    print("  OBG           = %d\n", OBG     );
+    print("  OBER          = %d\n", OBER    );
+    print("  STRT          = %d\n", STRT    );
+    print("  LOCK          = %d\n", LOCK    );
+    print("  OBWRE         = %d\n", OBWRE   );
+    print("  ERRIE         = %d\n", ERRIE   );
+    print("  EOPIE         = %d\n", EOPIE   );
+    print("  FLOCK         = %d\n", FLOCK   );
+    print("  FTPG          = %d\n", FTPG    );
+    print("  FTER          = %d\n", FTER    );
+    print("  BUFLOAD       = %d\n", BUFLOAD );
+    print("  BUFRST        = %d\n", BUFRST  );
   }
 };
 static_assert(sizeof(Reg_FLASH_CTLR) == 4);
@@ -597,15 +587,14 @@ struct Reg_FLASH_OBR {
   };
 
   void dump(cb_printf print) {
-    print("Reg_FLASH_OBR\n");
-    print("  raw         = 0x%08x\n", raw);
-    print("  OBERR       = %d\n", OBERR       );
-    print("  RDPRT       = %d\n", RDPRT       );
-    print("  IWDG_SW     = %d\n", IWDG_SW     );
-    print("  STANDBY_RST = %d\n", STANDBY_RST );
-    print("  CFGRSTT     = %d\n", CFGRSTT     );
-    print("  DATA0       = %d\n", DATA0       );
-    print("  DATA1       = %d\n", DATA1       );
+    print("Reg_FLASH_OBR   = 0x%08x\n", raw);
+    print("  OBERR         = %d\n", OBERR       );
+    print("  RDPRT         = %d\n", RDPRT       );
+    print("  IWDG_SW       = %d\n", IWDG_SW     );
+    print("  STANDBY_RST   = %d\n", STANDBY_RST );
+    print("  CFGRSTT       = %d\n", CFGRSTT     );
+    print("  DATA0         = %d\n", DATA0       );
+    print("  DATA1         = %d\n", DATA1       );
   }
 
 };
