@@ -15,9 +15,9 @@ struct SLDebugger {
   void     get_dbgp(uint8_t addr, void* out);
   void     put_dbg (uint8_t addr, uint32_t data);
 
-  void load_prog(uint32_t* prog);
-  void save_regs();
-  void load_regs();
+  void     load_prog(uint32_t* prog);
+  void     save_regs();
+  void     load_regs();
 
   uint32_t get_mem32(uint32_t addr);
   void     get_mem32p(uint32_t addr, void* data);
@@ -44,8 +44,8 @@ struct SLDebugger {
   uint32_t get_ds0()  { uint32_t r; get_csrp(0x7B2, &r); return r; }
   uint32_t get_ds1()  { uint32_t r; get_csrp(0x7B3, &r); return r; }
 
-  Reg_DMSTATUS   get_dmstatus() { Reg_DMSTATUS r;   get_dbgp(ADDR_DMSTATUS, &r);   return r; }
-  Reg_ABSTRACTCS get_abstatus() { Reg_ABSTRACTCS r; get_dbgp(ADDR_ABSTRACTCS, &r); return r; }
+  Reg_DMSTATUS   get_dmstatus() { Reg_DMSTATUS r;   r.raw = get_dbg(ADDR_DMSTATUS);   return r; }
+  Reg_ABSTRACTCS get_abstatus() { Reg_ABSTRACTCS r; r.raw = get_dbg(ADDR_ABSTRACTCS); return r; }
 
   //----------
 

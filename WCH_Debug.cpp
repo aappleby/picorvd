@@ -196,7 +196,7 @@ void SLDebugger::get_mem32p(uint32_t addr, void* data) {
   put_dbg(ADDR_DATA0,   0xDEADBEEF);
   put_dbg(ADDR_DATA1,   addr);
   put_dbg(ADDR_COMMAND, cmd_runprog);
-  get_dbgp(ADDR_DATA0,  data);
+  *(uint32_t*)data = get_dbg(ADDR_DATA0);
 }
 
 void SLDebugger::put_mem32p(uint32_t addr, void* data) {
@@ -231,7 +231,7 @@ void SLDebugger::get_block32(uint32_t addr, void* data, int size_dwords) {
   put_dbg(ADDR_AUTOCMD, 0x00000001);
   put_dbg(ADDR_COMMAND, cmd_runprog);
   for (int i = 0; i < size_dwords; i++) {
-    get_dbgp(ADDR_DATA0, cursor++);
+    *cursor++ = get_dbg(ADDR_DATA0);
   }
 
   put_dbg(ADDR_AUTOCMD, 0x00000000);
@@ -282,10 +282,8 @@ uint32_t SLDebugger::get_gpr(int index) {
   cmd.AARSIZE    = 2;
   cmd.CMDTYPE    = 0;
 
-  uint32_t result = 0;
   put_dbg(ADDR_COMMAND, cmd.raw);
-  get_dbgp(ADDR_DATA0, &result);
-  return result;
+  return get_dbg(ADDR_DATA0);
 }
 
 void SLDebugger::put_gpr(int index, uint32_t gpr) {
@@ -315,7 +313,7 @@ void SLDebugger::get_csrp(int index, void* data) {
   cmd.CMDTYPE    = 0;
 
   put_dbg(ADDR_COMMAND, cmd.raw);
-  get_dbgp(ADDR_DATA0, data);
+  *(uint32_t*)data = get_dbg(ADDR_DATA0);
 }
 
 void SLDebugger::put_csrp(int index, void* data) {
@@ -395,7 +393,7 @@ bool SLDebugger::test_mem() {
   }
 
   Reg_ABSTRACTCS reg_abstractcs;
-  get_dbgp(ADDR_ABSTRACTCS, &reg_abstractcs);
+  reg_abstractcs.raw = get_dbg(ADDR_ABSTRACTCS);
   if (reg_abstractcs.CMDER) {
     print("Memory test fail, CMDER=%d\n", reg_abstractcs.CMDER);
     fail = true;
