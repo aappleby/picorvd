@@ -76,6 +76,7 @@ struct Reg_CPBR {
   };
 
   void dump(cb_printf print) {
+    print("Reg_CPBR\n");
     print("  raw          = 0x%08x\n", raw);
     print("  TDIV         = %d\n", TDIV);
     print("  SOPN         = %d\n", SOPN);
@@ -111,6 +112,7 @@ struct Reg_CFGR {
   };
 
   void dump(cb_printf print) {
+    print("Reg_CFGR\n");
     print("  raw          = 0x%08x\n", raw);
     print("  TDIVCFG      = %d\n", TDIVCFG   );
     print("  SOPNCFG      = %d\n", SOPNCFG   );
@@ -146,6 +148,7 @@ struct Reg_SHDWCFGR {
   };
 
   void dump(cb_printf print) {
+    print("Reg_SHDWCFGR\n");
     print("  raw          = 0x%08x\n", raw);
     print("  TDIVCFG      = %d\n", TDIVCFG   );
     print("  SOPNCFG      = %d\n", SOPNCFG   );
@@ -185,7 +188,6 @@ struct Reg_DMCONTROL {
     print("  ACKHAVERESET  = %d\n", ACKHAVERESET);
     print("  RESUMEREQ     = %d\n", RESUMEREQ);
     print("  HALTREQ       = %d\n", HALTREQ);
-    print("\n");    
   }
 };
 static_assert(sizeof(Reg_DMCONTROL) == 4);
@@ -218,6 +220,7 @@ struct Reg_DMSTATUS {
   };
 
   void dump(cb_printf print) {
+    print("Reg_DMSTATUS\n");
     print("  raw           = 0x%08x\n", raw);
     print("  VERSION       = %d\n", VERSION       );
     print("  AUTHENTICATED = %d\n", AUTHENTICATED );
@@ -254,6 +257,7 @@ struct Reg_HARTINFO {
   };
 
   void dump(cb_printf print) {
+    print("Reg_HARTINFO\n");
     print("  raw           = 0x%08x\n", raw);
     print("  DATAADDR      = %d\n", DATAADDR  );
     print("  DATASIZE      = %d\n", DATASIZE  );
@@ -286,6 +290,7 @@ struct Reg_ABSTRACTCS {
   };
 
   void dump(cb_printf print) {
+    print("Reg_ABSTRACTCS\n");
     print("  raw           = 0x%08x\n", raw);
     print("  DATACOUNT     = %d\n", DATACOUNT  );
     print("  CMDER         = %d\n", CMDER      );
@@ -316,6 +321,7 @@ struct Reg_COMMAND {
   };
 
   void dump(cb_printf print) {
+    print("Reg_COMMAND\n");
     print("  raw           = 0x%08x\n", raw);
     print("  REGNO         = 0x%x\n", REGNO      );
     print("  WRITE         = %d\n", WRITE      );
@@ -344,6 +350,7 @@ struct Reg_AUTOCMD {
   };
 
   void dump(cb_printf print) {
+    print("Reg_AUTOCMD\n");
     print("  raw           = 0x%08x\n", raw);
     print("  AUTOEXECDATA  = %d\n", AUTOEXECDATA);
     print("  AUTOEXECPROG  = %d\n", AUTOEXECPROG);
@@ -366,6 +373,7 @@ struct Reg_HALTSUM0 {
   };
 
   void dump(cb_printf print) {
+    print("Reg_HALTSUM0\n");
     print("  raw           = 0x%08x\n", raw);
     print("  HALTSUM0      = %d\n", HALTSUM0);
   }
@@ -397,6 +405,7 @@ struct Reg_DCSR {
   };
 
   void dump(cb_printf print) {
+    print("Reg_DCSR\n");
     print("  raw           = 0x%08x\n", raw);
     print("  PRV           = %d\n", PRV       );
     print("  STEP          = %d\n", STEP      );
@@ -429,6 +438,7 @@ struct Reg_DBGMCU_CR {
   };
 
   void dump(cb_printf print) {
+    print("Reg_DBGMCU_CR\n");
     print("  raw         = 0x%08x\n", raw);
     print("  IWDG_STOP   = %d\n", IWDG_STOP );
     print("  WWDG_STOP   = %d\n", WWDG_STOP );
@@ -451,6 +461,12 @@ struct Reg_FLASH_ACTLR {
     };
     uint32_t raw;
   };
+
+  void dump(cb_printf print) {
+    print("Reg_FLASH_ACTLR\n");
+    print("  raw         = 0x%08x\n", raw);
+    print("  LATENCY     = %d\n", LATENCY);
+  }
 };
 static_assert(sizeof(Reg_FLASH_ACTLR) == 4);
 
@@ -475,6 +491,7 @@ struct Reg_FLASH_STATR {
   };
 
   void dump(cb_printf print) {
+    print("Reg_FLASH_STATR\n");
     print("  raw           = 0x%08x\n", raw);
     print("  BUSY        = %d\n", BUSY     );
     print("  WRPRTERR    = %d\n", WRPRTERR );
@@ -536,6 +553,7 @@ struct Reg_FLASH_CTLR {
   };
 
   void dump(cb_printf print) {
+    print("Reg_FLASH_CTLR\n");
     print("  raw         = 0x%08x\n", raw);
     print("  PG          = %d\n", PG      );
     print("  PER         = %d\n", PER     );
@@ -579,6 +597,7 @@ struct Reg_FLASH_OBR {
   };
 
   void dump(cb_printf print) {
+    print("Reg_FLASH_OBR\n");
     print("  raw         = 0x%08x\n", raw);
     print("  OBERR       = %d\n", OBERR       );
     print("  RDPRT       = %d\n", RDPRT       );

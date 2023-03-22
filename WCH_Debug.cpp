@@ -334,7 +334,7 @@ void SLDebugger::put_csr(int index, uint32_t data) {
   cmd.CMDTYPE    = 0;
 
   put_dbg(ADDR_DATA0, data);
-  put_dbg(ADDR_COMMAND, cmd.raw);
+  put_dbg(ADDR_COMMAND, cmd);
 }
 
 //------------------------------------------------------------------------------
@@ -342,7 +342,7 @@ void SLDebugger::put_csr(int index, uint32_t data) {
 void SLDebugger::step() {
   Reg_DCSR dcsr = get_dcsr();
   dcsr.STEP = 1;
-  put_gpr(0x7B0, dcsr.raw);
+  put_gpr(0x7B0, dcsr);
   put_dbg(ADDR_DMCONTROL, 0x40000001);
   while (get_dmstatus().ANYHALTED);
   put_dbg(ADDR_DMCONTROL, 0x80000001);
@@ -383,22 +383,13 @@ bool SLDebugger::test_mem() {
 //-----------------------------------------------------------------------------
 
 void SLDebugger::print_status() {
-  //Reg_CPBR       reg_cpbr       = get_dbg(ADDR_CPBR);
-  //Reg_CFGR       reg_cfgr       = get_dbg(ADDR_CFGR);
-  //Reg_SHDWCFGR   reg_shdwcfgr   = get_dbg(ADDR_SHDWCFGR);
-
-  //----------
-
-  Reg_DMCONTROL(get_dbg(ADDR_DMCONTROL)).dump(print);
-  
-  Reg_DMSTATUS   reg_dmstatus   = get_dbg(ADDR_DMSTATUS);
-  print("reg_dmstatus\n");   reg_dmstatus.dump(print);   print("\n");
-  
-  Reg_ABSTRACTCS reg_abstractcs = get_dbg(ADDR_ABSTRACTCS);
-  print("reg_abstractcs\n"); reg_abstractcs.dump(print); print("\n");
-  
-  Reg_DCSR dcsr = get_csr(0x7B0);
-  print("reg_dcsr\n");       dcsr.dump(print);           print("\n");
+  Reg_CPBR      (get_dbg(ADDR_CPBR)).dump(print);
+  Reg_CFGR      (get_dbg(ADDR_CFGR)).dump(print);
+  Reg_SHDWCFGR  (get_dbg(ADDR_SHDWCFGR)).dump(print);
+  Reg_DMCONTROL (get_dbg(ADDR_DMCONTROL)).dump(print);
+  Reg_DMSTATUS  (get_dbg(ADDR_DMSTATUS)).dump(print);
+  Reg_ABSTRACTCS(get_dbg(ADDR_ABSTRACTCS)).dump(print);
+  Reg_DCSR      (get_csr(0x7B0)).dump(print);
   
   print("dpc  0x%08x\n", get_csr(0x7B1));
   print("ds0  0x%08x\n", get_csr(0x7B2));
@@ -539,23 +530,13 @@ void SLDebugger::dump_ram() {
 //------------------------------------------------------------------------------
 
 void SLDebugger::dump_flash() {
-
-  Reg_FLASH_STATR s  = get_mem32(ADDR_FLASH_STATR);
-  Reg_FLASH_CTLR c   = get_mem32(ADDR_FLASH_CTLR);
-  Reg_FLASH_OBR o    = get_mem32(ADDR_FLASH_OBR);
-  uint32_t flash_wpr = get_mem32(ADDR_FLASH_WPR);
+  Reg_FLASH_STATR(get_mem32(ADDR_FLASH_STATR)).dump(print);
+  Reg_FLASH_CTLR(get_mem32(ADDR_FLASH_CTLR)).dump(print);
+  Reg_FLASH_OBR(get_mem32(ADDR_FLASH_OBR)).dump(print);
+  print("flash_wpr 0x%08x\n", get_mem32(ADDR_FLASH_WPR));
 
   uint32_t temp[256];
   get_block32(0x08000000, temp, 256);
-
-  print("flash_wpr 0x%08x\n", flash_wpr);
-  print("Reg_FLASH_STATR\n");
-  s.dump(print);
-  print("Reg_FLASH_CTLR\n");
-  c.dump(print);
-  print("Reg_FLASH_OBR\n");
-  o.dump(print);
-
   for (int y = 0; y < 16; y++) {
     for (int x = 0; x < 16; x++) {
       print("0x%08x ", temp[x + y * 16]);
