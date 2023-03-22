@@ -377,8 +377,8 @@ static_assert(sizeof(Reg_HALTSUM0) == 4);
 
 //------------------------------------------------------------------------------
 
-struct Reg_DCSR {
-  Reg_DCSR(uint32_t raw = 0) { this->raw = raw; }
+struct Csr_DCSR {
+  Csr_DCSR(uint32_t raw = 0) { this->raw = raw; }
   operator uint32_t() const { return raw; }
 
   union {
@@ -411,7 +411,7 @@ struct Reg_DCSR {
     print("  XDEBUGVER     = %d\n", XDEBUGVER );
   }
 };
-static_assert(sizeof(Reg_DCSR) == 4);
+static_assert(sizeof(Csr_DCSR) == 4);
 
 //------------------------------------------------------------------------------
 

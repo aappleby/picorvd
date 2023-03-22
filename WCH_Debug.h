@@ -9,6 +9,7 @@ struct SLDebugger {
   void reset();
   void halt();
   void unhalt(bool reset);
+  void step();
   void clear_err();
 
   // Debugger register access
@@ -39,9 +40,6 @@ struct SLDebugger {
   // Flash write
   void write_flash(uint32_t dst_addr, uint32_t* data, int size_dwords);
 
-  // Step/breakpoints
-  void step();
-
   // Test stuff
   void print_status();
   void dump_ram();
@@ -53,14 +51,12 @@ struct SLDebugger {
 private:
 
   void run_command(uint32_t addr, uint32_t ctl1, uint32_t ctl2);
-  void save_regs();
-  void load_regs();
   void load_prog(uint32_t* prog);
 
   int swd_pin = -1;
   uint32_t* active_prog = nullptr;
 
-  int  reg_count = 16;
+  int reg_count = 16;
   uint32_t regfile[32];
 
   cb_printf print = nullptr;
