@@ -7,6 +7,9 @@
 #include "build/singlewire.pio.h"
 #include "hardware/clocks.h"
 #include "WCH_Debug.h"
+#include "log.h"
+#include "gdb_server.h"
+#include "utils.h"
 
 const uint SWD_PIN = 14;
 
@@ -18,26 +21,46 @@ extern "C" {
   void uart_read_blocking (uart_inst_t *uart, uint8_t *dst, size_t len);
 };
 
+void ser_put(char c) {
+  if (c == '\n') ser_put('\r');
+  uart_write_blocking(uart0, (uint8_t*)&c, 1);
+}
+
+char ser_get() {
+  char r = 0;
+  uart_read_blocking(uart0, (uint8_t*)&r, 1);
+  return r;
+}
+
+void usb_put(char c) {
+  if (c == '\n') usb_put('\r');
+  stdio_usb_out_chars(&c, 1);
+}
+
+char usb_get() {
+  char r = 0;
+  while (1) {
+    int len = stdio_usb_in_chars(&r, 1);
+    if (len) return r;
+  }
+  // should never get here...
+  return 0;
+}
+
+
 //------------------------------------------------------------------------------
 
-int usb_printf(const char* fmt, ...) {
+void usb_printf(const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  char buffer[256];
-  int len = vsnprintf(buffer, 256, fmt, args);
-  stdio_usb_out_chars(buffer, len);
-  return len;
+  vprint_to(usb_put, fmt, args);
 }
 
-int ser_printf(const char* fmt, ...) {
+void ser_printf(const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  char buffer[256];
-  int len = vsnprintf(buffer, 256, fmt, args);
-  uart_write_blocking(uart0, (uint8_t*)buffer, len);
-  return len;
+  vprint_to(ser_put, fmt, args);
 }
-
 
 //------------------------------------------------------------------------------
 
@@ -95,7 +118,8 @@ unsigned int blink_bin_len = 548;
 
 int main() {
   stdio_usb_init();
-  while(!stdio_usb_connected());
+
+  Log log(ser_put);
 
   // Enable non-USB serial port on gpio 0/1 for meta-debug output :D
   uart_init(uart0, 3000000);
@@ -103,19 +127,33 @@ int main() {
   gpio_set_function(1, GPIO_FUNC_UART);  
 
   // Wait for Minicom to finish connecting before sending clear screen etc
-  sleep_ms(100);
+  //sleep_ms(100);
 
-  SLDebugger sl;
-  sl.init(SWD_PIN, usb_printf);
-  sl.reset();
+  //SLDebugger sl;
+  //sl.init(SWD_PIN, usb_printf);
+  //sl.reset();
 
   char command[256] = {0};
   uint8_t cursor = 0;
 
-  usb_printf("\033[2J");
-  usb_printf("PicoDebug 0.0.0\n");
-  ser_printf("<debug log begin>\n");
+  //log("\033[2J");
+  log("PicoDebug 0.0.2\n");
+  log("<debug log begin>\n");
 
+  /*
+  while(1) {
+    auto c = usb_get();
+    ser_put(c);
+  }
+  */
+
+  //while(!stdio_usb_connected());
+  //log("stdio_usb_connected()\n");
+
+  GDBServer server(usb_get, usb_put, log);
+  server.loop();
+
+#if 0
   while(1) {
     usb_printf("> ");
     while(1) {
@@ -157,6 +195,7 @@ int main() {
     cursor = 0;
     command[cursor] = 0;
   }
+#endif
 }
 
 //------------------------------------------------------------------------------

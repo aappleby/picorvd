@@ -11,8 +11,8 @@ volatile void busy_wait(int count) {
 
 //-----------------------------------------------------------------------------
 
-void SLDebugger::init(int swd_pin, cb_printf print) {
-  this->print = print;
+void SLDebugger::init(int swd_pin, putter cb_put) {
+  this->cb_put = cb_put;
   this->swd_pin = swd_pin;
 
   gpio_set_drive_strength(swd_pin, GPIO_DRIVE_STRENGTH_2MA);
@@ -376,7 +376,6 @@ void SLDebugger::write_flash(uint32_t dst_addr, uint32_t* data, int size_dwords)
 
   bool first_word = true;
   int page_count = (size_dwords + 15) / 16;
-  int counter = 0;
 
   // Start feeding dwords to prog_write_incremental. The busy-wait loops above
   // will complete before we finish sending the next word, except at the end
@@ -406,22 +405,24 @@ void SLDebugger::write_flash(uint32_t dst_addr, uint32_t* data, int size_dwords)
 //-----------------------------------------------------------------------------
 
 void SLDebugger::print_status() {
-  Reg_CPBR      (get_dbg(ADDR_CPBR)).dump(print);
-  Reg_CFGR      (get_dbg(ADDR_CFGR)).dump(print);
-  Reg_SHDWCFGR  (get_dbg(ADDR_SHDWCFGR)).dump(print);
-  Reg_DMCONTROL (get_dbg(ADDR_DMCONTROL)).dump(print);
-  Reg_DMSTATUS  (get_dbg(ADDR_DMSTATUS)).dump(print);
-  Reg_ABSTRACTCS(get_dbg(ADDR_ABSTRACTCS)).dump(print);
-  Csr_DCSR      (get_csr(CSR_DCSR)).dump(print);
 
-  print("dpc  0x%08x\n", get_csr(CSR_DPC));
-  print("ds0  0x%08x\n", get_csr(CSR_DS0));
-  print("ds1  0x%08x\n", get_csr(CSR_DS1));
+  Reg_CPBR      (get_dbg(ADDR_CPBR)).dump(cb_put);
+  Reg_CFGR      (get_dbg(ADDR_CFGR)).dump(cb_put);
+  Reg_SHDWCFGR  (get_dbg(ADDR_SHDWCFGR)).dump(cb_put);
+  Reg_DMCONTROL (get_dbg(ADDR_DMCONTROL)).dump(cb_put);
+  Reg_DMSTATUS  (get_dbg(ADDR_DMSTATUS)).dump(cb_put);
+  Reg_ABSTRACTCS(get_dbg(ADDR_ABSTRACTCS)).dump(cb_put);
+  Csr_DCSR      (get_csr(CSR_DCSR)).dump(cb_put);
 
-  print("\n");
+  print_to(cb_put, "dpc  0x%08x\n", get_csr(CSR_DPC));
+  print_to(cb_put, "ds0  0x%08x\n", get_csr(CSR_DS0));
+  print_to(cb_put, "ds1  0x%08x\n", get_csr(CSR_DS1));
+
+  print_to(cb_put, "\n");
 }
 
 //------------------------------------------------------------------------------
+// Dumps all ram
 
 void SLDebugger::dump_ram() {
   uint32_t temp[512];
@@ -430,27 +431,28 @@ void SLDebugger::dump_ram() {
 
   for (int y = 0; y < 32; y++) {
     for (int x = 0; x < 16; x++) {
-      print("0x%08x ", temp[x + y * 16]);
+      print_to(cb_put, "0x%08x ", temp[x + y * 16]);
     }
-    print("\n");
+    print_to(cb_put, "\n");
   }
 }
 
 //------------------------------------------------------------------------------
+// Dumps the first 1K of flash.
 
 void SLDebugger::dump_flash() {
-  Reg_FLASH_STATR(get_mem(ADDR_FLASH_STATR)).dump(print);
-  Reg_FLASH_CTLR(get_mem(ADDR_FLASH_CTLR)).dump(print);
-  Reg_FLASH_OBR(get_mem(ADDR_FLASH_OBR)).dump(print);
-  print("flash_wpr 0x%08x\n", get_mem(ADDR_FLASH_WPR));
+  Reg_FLASH_STATR(get_mem(ADDR_FLASH_STATR)).dump(cb_put);
+  Reg_FLASH_CTLR(get_mem(ADDR_FLASH_CTLR)).dump(cb_put);
+  Reg_FLASH_OBR(get_mem(ADDR_FLASH_OBR)).dump(cb_put);
+  print_to(cb_put, "flash_wpr 0x%08x\n", get_mem(ADDR_FLASH_WPR));
 
   uint32_t temp[256];
   get_block(0x08000000, temp, 256);
   for (int y = 0; y < 16; y++) {
     for (int x = 0; x < 16; x++) {
-      print("0x%08x ", temp[x + y * 16]);
+      print_to(cb_put, "0x%08x ", temp[x + y * 16]);
     }
-    print("\n");
+    print_to(cb_put, "\n");
   }
 }
 
@@ -470,14 +472,14 @@ bool SLDebugger::test_mem() {
     addr = base + (4 * i);
     uint32_t data = get_mem(addr);
     if (data != 0xBEEF0000 + i) {
-      print("Memory test fail at 0x%08x : expected 0x%08x, got 0x%08x\n", addr, 0xBEEF0000 + i, data);
+      print_to(cb_put, "Memory test fail at 0x%08x : expected 0x%08x, got 0x%08x\n", addr, 0xBEEF0000 + i, data);
       fail = true;
     }
   }
 
   Reg_ABSTRACTCS reg_abstractcs = get_dbg(ADDR_ABSTRACTCS);
   if (reg_abstractcs.CMDER) {
-    print("Memory test fail, CMDER=%d\n", reg_abstractcs.CMDER);
+    print_to(cb_put, "Memory test fail, CMDER=%d\n", reg_abstractcs.CMDER);
     fail = true;
   }
 
@@ -512,7 +514,7 @@ void SLDebugger::run_command(uint32_t addr, uint32_t ctl1, uint32_t ctl2) {
 
   load_prog((uint32_t*)prog_run_command);
   put_gpr(10, 0x40022000);   // flash base
-  put_gpr(11, addr);            // not using addr
+  put_gpr(11, addr);
   put_gpr(12, ctl1);
   put_gpr(13, ctl2);
   put_dbg(ADDR_COMMAND, cmd_runprog);

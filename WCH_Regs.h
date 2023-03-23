@@ -1,7 +1,6 @@
 #pragma once
 #include <stdint.h>
-
-typedef int (*cb_printf)(const char* format, ...);
+#include "utils.h"
 
 //------------------------------------------------------------------------------
 
@@ -80,15 +79,15 @@ struct Reg_CPBR {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_CPBR        = 0x%08x\n", raw);
-    print("  TDIV          = %d\n", TDIV);
-    print("  SOPN          = %d\n", SOPN);
-    print("  CHECKSTA      = %d\n", CHECKSTA);
-    print("  CMDEXTENSTA   = %d\n", CMDEXTENSTA);
-    print("  OUTSTA        = %d\n", OUTSTA);
-    print("  IOMODE        = %d\n", IOMODE);
-    print("  VERSION       = %d\n", VERSION);
+  void dump(putter p) {
+    print_to(p, "Reg_CPBR        = 0x%08x\n", raw);
+    print_to(p, "  TDIV          = %d\n", TDIV);
+    print_to(p, "  SOPN          = %d\n", SOPN);
+    print_to(p, "  CHECKSTA      = %d\n", CHECKSTA);
+    print_to(p, "  CMDEXTENSTA   = %d\n", CMDEXTENSTA);
+    print_to(p, "  OUTSTA        = %d\n", OUTSTA);
+    print_to(p, "  IOMODE        = %d\n", IOMODE);
+    print_to(p, "  VERSION       = %d\n", VERSION);
   }
 };
 static_assert(sizeof(Reg_CPBR) == 4);
@@ -115,15 +114,15 @@ struct Reg_CFGR {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_CFGR        = 0x%08x\n", raw);
-    print("  TDIVCFG       = %d\n", TDIVCFG   );
-    print("  SOPNCFG       = %d\n", SOPNCFG   );
-    print("  CHECKEN       = %d\n", CHECKEN   );
-    print("  CMDEXTEN      = %d\n", CMDEXTEN  );
-    print("  OUTEN         = %d\n", OUTEN     );
-    print("  IOMODECFG     = %d\n", IOMODECFG );
-    print("  KEY           = 0x%x\n", KEY       );
+  void dump(putter p) {
+    print_to(p, "Reg_CFGR        = 0x%08x\n", raw);
+    print_to(p, "  TDIVCFG       = %d\n", TDIVCFG   );
+    print_to(p, "  SOPNCFG       = %d\n", SOPNCFG   );
+    print_to(p, "  CHECKEN       = %d\n", CHECKEN   );
+    print_to(p, "  CMDEXTEN      = %d\n", CMDEXTEN  );
+    print_to(p, "  OUTEN         = %d\n", OUTEN     );
+    print_to(p, "  IOMODECFG     = %d\n", IOMODECFG );
+    print_to(p, "  KEY           = 0x%x\n", KEY       );
   }
 };
 static_assert(sizeof(Reg_CFGR) == 4);
@@ -150,15 +149,15 @@ struct Reg_SHDWCFGR {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_SHDWCFGR    = 0x%08x\n", raw);
-    print("  TDIVCFG       = %d\n", TDIVCFG   );
-    print("  SOPNCFG       = %d\n", SOPNCFG   );
-    print("  CHECKEN       = %d\n", CHECKEN   );
-    print("  CMDEXTEN      = %d\n", CMDEXTEN  );
-    print("  OUTEN         = %d\n", OUTEN     );
-    print("  IOMODECFG     = %d\n", IOMODECFG );
-    print("  KEY           = 0x%x\n", KEY       );
+  void dump(putter p) {
+    print_to(p, "Reg_SHDWCFGR    = 0x%08x\n", raw);
+    print_to(p, "  TDIVCFG       = %d\n", TDIVCFG   );
+    print_to(p, "  SOPNCFG       = %d\n", SOPNCFG   );
+    print_to(p, "  CHECKEN       = %d\n", CHECKEN   );
+    print_to(p, "  CMDEXTEN      = %d\n", CMDEXTEN  );
+    print_to(p, "  OUTEN         = %d\n", OUTEN     );
+    print_to(p, "  IOMODECFG     = %d\n", IOMODECFG );
+    print_to(p, "  KEY           = 0x%x\n", KEY       );
   }
 };
 static_assert(sizeof(Reg_SHDWCFGR) == 4);
@@ -182,13 +181,13 @@ struct Reg_DMCONTROL {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_DMCONTROL   = 0x%08x\n", raw);
-    print("  DMACTIVE      = %d\n", DMACTIVE);
-    print("  NDMRESET      = %d\n", NDMRESET);
-    print("  ACKHAVERESET  = %d\n", ACKHAVERESET);
-    print("  RESUMEREQ     = %d\n", RESUMEREQ);
-    print("  HALTREQ       = %d\n", HALTREQ);
+  void dump(putter p) {
+    print_to(p, "Reg_DMCONTROL   = 0x%08x\n", raw);
+    print_to(p, "  DMACTIVE      = %d\n", DMACTIVE);
+    print_to(p, "  NDMRESET      = %d\n", NDMRESET);
+    print_to(p, "  ACKHAVERESET  = %d\n", ACKHAVERESET);
+    print_to(p, "  RESUMEREQ     = %d\n", RESUMEREQ);
+    print_to(p, "  HALTREQ       = %d\n", HALTREQ);
   }
 };
 static_assert(sizeof(Reg_DMCONTROL) == 4);
@@ -220,20 +219,20 @@ struct Reg_DMSTATUS {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_DMSTATUS    = 0x%08x\n", raw);
-    print("  VERSION       = %d\n", VERSION       );
-    print("  AUTHENTICATED = %d\n", AUTHENTICATED );
-    print("  ANYHALTED     = %d\n", ANYHALTED     );
-    print("  ALLHALTED     = %d\n", ALLHALTED     );
-    print("  ANYRUNNING    = %d\n", ANYRUNNING    );
-    print("  ALLRUNNING    = %d\n", ALLRUNNING    );
-    print("  ANYAVAIL      = %d\n", ANYAVAIL      );
-    print("  ALLAVAIL      = %d\n", ALLAVAIL      );
-    print("  ANYRESUMEACK  = %d\n", ANYRESUMEACK  );
-    print("  ALLRESUMEACK  = %d\n", ALLRESUMEACK  );
-    print("  ANYHAVERESET  = %d\n", ANYHAVERESET  );
-    print("  ALLHAVERESET  = %d\n", ALLHAVERESET  );
+  void dump(putter p) {
+    print_to(p, "Reg_DMSTATUS    = 0x%08x\n", raw);
+    print_to(p, "  VERSION       = %d\n", VERSION       );
+    print_to(p, "  AUTHENTICATED = %d\n", AUTHENTICATED );
+    print_to(p, "  ANYHALTED     = %d\n", ANYHALTED     );
+    print_to(p, "  ALLHALTED     = %d\n", ALLHALTED     );
+    print_to(p, "  ANYRUNNING    = %d\n", ANYRUNNING    );
+    print_to(p, "  ALLRUNNING    = %d\n", ALLRUNNING    );
+    print_to(p, "  ANYAVAIL      = %d\n", ANYAVAIL      );
+    print_to(p, "  ALLAVAIL      = %d\n", ALLAVAIL      );
+    print_to(p, "  ANYRESUMEACK  = %d\n", ANYRESUMEACK  );
+    print_to(p, "  ALLRESUMEACK  = %d\n", ALLRESUMEACK  );
+    print_to(p, "  ANYHAVERESET  = %d\n", ANYHAVERESET  );
+    print_to(p, "  ALLHAVERESET  = %d\n", ALLHAVERESET  );
   }
 };
 static_assert(sizeof(Reg_DMSTATUS) == 4);
@@ -256,14 +255,14 @@ struct Reg_HARTINFO {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_HARTINFO    = 0x%08x\n", raw);
-    print("  DATAADDR      = %d\n", DATAADDR  );
-    print("  DATASIZE      = %d\n", DATASIZE  );
-    print("  DATAACCESS    = %d\n", DATAACCESS);
-    print("  PAD0          = %d\n", PAD0      );
-    print("  NSCRATCH      = %d\n", NSCRATCH  );
-    print("  PAD1          = %d\n", PAD1      );
+  void dump(putter p) {
+    print_to(p, "Reg_HARTINFO    = 0x%08x\n", raw);
+    print_to(p, "  DATAADDR      = %d\n", DATAADDR  );
+    print_to(p, "  DATASIZE      = %d\n", DATASIZE  );
+    print_to(p, "  DATAACCESS    = %d\n", DATAACCESS);
+    print_to(p, "  PAD0          = %d\n", PAD0      );
+    print_to(p, "  NSCRATCH      = %d\n", NSCRATCH  );
+    print_to(p, "  PAD1          = %d\n", PAD1      );
   }
 };
 static_assert(sizeof(Reg_HARTINFO) == 4);
@@ -288,12 +287,12 @@ struct Reg_ABSTRACTCS {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_ABSTRACTCS  = 0x%08x\n", raw);
-    print("  DATACOUNT     = %d\n", DATACOUNT  );
-    print("  CMDER         = %d\n", CMDER      );
-    print("  BUSY          = %d\n", BUSY       );
-    print("  PROGBUFSIZE   = %d\n", PROGBUFSIZE);
+  void dump(putter p) {
+    print_to(p, "Reg_ABSTRACTCS  = 0x%08x\n", raw);
+    print_to(p, "  DATACOUNT     = %d\n", DATACOUNT  );
+    print_to(p, "  CMDER         = %d\n", CMDER      );
+    print_to(p, "  BUSY          = %d\n", BUSY       );
+    print_to(p, "  PROGBUFSIZE   = %d\n", PROGBUFSIZE);
   }
 };
 static_assert(sizeof(Reg_ABSTRACTCS) == 4);
@@ -318,15 +317,15 @@ struct Reg_COMMAND {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_COMMAND     = 0x%08x\n", raw);
-    print("  REGNO         = 0x%x\n", REGNO      );
-    print("  WRITE         = %d\n", WRITE      );
-    print("  TRANSFER      = %d\n", TRANSFER   );
-    print("  POSTEXEC      = %d\n", POSTEXEC   );
-    print("  AARPOSTINC    = %d\n", AARPOSTINC );
-    print("  AARSIZE       = %d\n", AARSIZE    );
-    print("  CMDTYPE       = %d\n", CMDTYPE    );
+  void dump(putter p) {
+    print_to(p, "Reg_COMMAND     = 0x%08x\n", raw);
+    print_to(p, "  REGNO         = 0x%x\n", REGNO      );
+    print_to(p, "  WRITE         = %d\n", WRITE      );
+    print_to(p, "  TRANSFER      = %d\n", TRANSFER   );
+    print_to(p, "  POSTEXEC      = %d\n", POSTEXEC   );
+    print_to(p, "  AARPOSTINC    = %d\n", AARPOSTINC );
+    print_to(p, "  AARSIZE       = %d\n", AARSIZE    );
+    print_to(p, "  CMDTYPE       = %d\n", CMDTYPE    );
   }
 };
 static_assert(sizeof(Reg_COMMAND) == 4);
@@ -346,10 +345,10 @@ struct Reg_AUTOCMD {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_AUTOCMD     = 0x%08x\n", raw);
-    print("  AUTOEXECDATA  = %d\n", AUTOEXECDATA);
-    print("  AUTOEXECPROG  = %d\n", AUTOEXECPROG);
+  void dump(putter p) {
+    print_to(p, "Reg_AUTOCMD     = 0x%08x\n", raw);
+    print_to(p, "  AUTOEXECDATA  = %d\n", AUTOEXECDATA);
+    print_to(p, "  AUTOEXECPROG  = %d\n", AUTOEXECPROG);
   }
 };
 static_assert(sizeof(Reg_AUTOCMD) == 4);
@@ -368,9 +367,9 @@ struct Reg_HALTSUM0 {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_HALTSUM0    = 0x%08x\n", raw);
-    print("  HALTSUM0      = %d\n", HALTSUM0);
+  void dump(putter p) {
+    print_to(p, "Reg_HALTSUM0    = 0x%08x\n", raw);
+    print_to(p, "  HALTSUM0      = %d\n", HALTSUM0);
   }
 };
 static_assert(sizeof(Reg_HALTSUM0) == 4);
@@ -399,16 +398,16 @@ struct Csr_DCSR {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_DCSR        = 0x%08x\n", raw);
-    print("  PRV           = %d\n", PRV       );
-    print("  STEP          = %d\n", STEP      );
-    print("  CAUSE         = %d\n", CAUSE     );
-    print("  STOPTIME      = %d\n", STOPTIME  );
-    print("  STEPIE        = %d\n", STEPIE    );
-    print("  EBREAKU       = %d\n", EBREAKU   );
-    print("  EBREAKM       = %d\n", EBREAKM   );
-    print("  XDEBUGVER     = %d\n", XDEBUGVER );
+  void dump(putter p) {
+    print_to(p, "Reg_DCSR        = 0x%08x\n", raw);
+    print_to(p, "  PRV           = %d\n", PRV       );
+    print_to(p, "  STEP          = %d\n", STEP      );
+    print_to(p, "  CAUSE         = %d\n", CAUSE     );
+    print_to(p, "  STOPTIME      = %d\n", STOPTIME  );
+    print_to(p, "  STEPIE        = %d\n", STEPIE    );
+    print_to(p, "  EBREAKU       = %d\n", EBREAKU   );
+    print_to(p, "  EBREAKM       = %d\n", EBREAKM   );
+    print_to(p, "  XDEBUGVER     = %d\n", XDEBUGVER );
   }
 };
 static_assert(sizeof(Csr_DCSR) == 4);
@@ -431,12 +430,12 @@ struct Reg_DBGMCU_CR {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_DBGMCU_CR = 0x%08x\n", raw);
-    print("  IWDG_STOP   = %d\n", IWDG_STOP );
-    print("  WWDG_STOP   = %d\n", WWDG_STOP );
-    print("  TIM1_STOP   = %d\n", TIM1_STOP );
-    print("  TIM2_STOP   = %d\n", TIM2_STOP );
+  void dump(putter p) {
+    print_to(p, "Reg_DBGMCU_CR = 0x%08x\n", raw);
+    print_to(p, "  IWDG_STOP   = %d\n", IWDG_STOP );
+    print_to(p, "  WWDG_STOP   = %d\n", WWDG_STOP );
+    print_to(p, "  TIM1_STOP   = %d\n", TIM1_STOP );
+    print_to(p, "  TIM2_STOP   = %d\n", TIM2_STOP );
   }
 };
 static_assert(sizeof(Reg_DBGMCU_CR) == 4);
@@ -455,9 +454,9 @@ struct Reg_FLASH_ACTLR {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_FLASH_ACTLR = 0x%08x\n", raw);
-    print("  LATENCY       = %d\n", LATENCY);
+  void dump(putter p) {
+    print_to(p, "Reg_FLASH_ACTLR = 0x%08x\n", raw);
+    print_to(p, "  LATENCY       = %d\n", LATENCY);
   }
 };
 static_assert(sizeof(Reg_FLASH_ACTLR) == 4);
@@ -482,13 +481,13 @@ struct Reg_FLASH_STATR {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_FLASH_STATR = 0x%08x\n", raw);
-    print("  BUSY          = %d\n", BUSY     );
-    print("  WRPRTERR      = %d\n", WRPRTERR );
-    print("  EOP           = %d\n", EOP      );
-    print("  MODE          = %d\n", MODE     );
-    print("  BOOT_LOCK     = %d\n", BOOT_LOCK);
+  void dump(putter p) {
+    print_to(p, "Reg_FLASH_STATR = 0x%08x\n", raw);
+    print_to(p, "  BUSY          = %d\n", BUSY     );
+    print_to(p, "  WRPRTERR      = %d\n", WRPRTERR );
+    print_to(p, "  EOP           = %d\n", EOP      );
+    print_to(p, "  MODE          = %d\n", MODE     );
+    print_to(p, "  BOOT_LOCK     = %d\n", BOOT_LOCK);
   }
 };
 static_assert(sizeof(Reg_FLASH_STATR) == 4);
@@ -543,23 +542,23 @@ struct Reg_FLASH_CTLR {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_FLASH_CTLR  = 0x%08x\n", raw);
-    print("  PG            = %d\n", PG      );
-    print("  PER           = %d\n", PER     );
-    print("  MER           = %d\n", MER     );
-    print("  OBG           = %d\n", OBG     );
-    print("  OBER          = %d\n", OBER    );
-    print("  STRT          = %d\n", STRT    );
-    print("  LOCK          = %d\n", LOCK    );
-    print("  OBWRE         = %d\n", OBWRE   );
-    print("  ERRIE         = %d\n", ERRIE   );
-    print("  EOPIE         = %d\n", EOPIE   );
-    print("  FLOCK         = %d\n", FLOCK   );
-    print("  FTPG          = %d\n", FTPG    );
-    print("  FTER          = %d\n", FTER    );
-    print("  BUFLOAD       = %d\n", BUFLOAD );
-    print("  BUFRST        = %d\n", BUFRST  );
+  void dump(putter p) {
+    print_to(p, "Reg_FLASH_CTLR  = 0x%08x\n", raw);
+    print_to(p, "  PG            = %d\n", PG      );
+    print_to(p, "  PER           = %d\n", PER     );
+    print_to(p, "  MER           = %d\n", MER     );
+    print_to(p, "  OBG           = %d\n", OBG     );
+    print_to(p, "  OBER          = %d\n", OBER    );
+    print_to(p, "  STRT          = %d\n", STRT    );
+    print_to(p, "  LOCK          = %d\n", LOCK    );
+    print_to(p, "  OBWRE         = %d\n", OBWRE   );
+    print_to(p, "  ERRIE         = %d\n", ERRIE   );
+    print_to(p, "  EOPIE         = %d\n", EOPIE   );
+    print_to(p, "  FLOCK         = %d\n", FLOCK   );
+    print_to(p, "  FTPG          = %d\n", FTPG    );
+    print_to(p, "  FTER          = %d\n", FTER    );
+    print_to(p, "  BUFLOAD       = %d\n", BUFLOAD );
+    print_to(p, "  BUFRST        = %d\n", BUFRST  );
   }
 };
 static_assert(sizeof(Reg_FLASH_CTLR) == 4);
@@ -586,15 +585,15 @@ struct Reg_FLASH_OBR {
     uint32_t raw;
   };
 
-  void dump(cb_printf print) {
-    print("Reg_FLASH_OBR   = 0x%08x\n", raw);
-    print("  OBERR         = %d\n", OBERR       );
-    print("  RDPRT         = %d\n", RDPRT       );
-    print("  IWDG_SW       = %d\n", IWDG_SW     );
-    print("  STANDBY_RST   = %d\n", STANDBY_RST );
-    print("  CFGRSTT       = %d\n", CFGRSTT     );
-    print("  DATA0         = %d\n", DATA0       );
-    print("  DATA1         = %d\n", DATA1       );
+  void dump(putter p) {
+    print_to(p, "Reg_FLASH_OBR   = 0x%08x\n", raw);
+    print_to(p, "  OBERR         = %d\n", OBERR       );
+    print_to(p, "  RDPRT         = %d\n", RDPRT       );
+    print_to(p, "  IWDG_SW       = %d\n", IWDG_SW     );
+    print_to(p, "  STANDBY_RST   = %d\n", STANDBY_RST );
+    print_to(p, "  CFGRSTT       = %d\n", CFGRSTT     );
+    print_to(p, "  DATA0         = %d\n", DATA0       );
+    print_to(p, "  DATA1         = %d\n", DATA1       );
   }
 
 };

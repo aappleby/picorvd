@@ -1,11 +1,12 @@
 #pragma once
 #include <stdint.h>
+#include "utils.h"
 #include "WCH_Regs.h"
 
 //------------------------------------------------------------------------------
 
 struct SLDebugger {
-  void init(int swd_pin, cb_printf print);
+  void init(int swd_pin, putter cb_put);
   void reset();
   void halt();
   void unhalt(bool reset);
@@ -59,7 +60,7 @@ private:
   int reg_count = 16;
   uint32_t regfile[32];
 
-  cb_printf print = nullptr;
+  putter cb_put = nullptr;
 };
 
 //------------------------------------------------------------------------------

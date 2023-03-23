@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 pico_sdk_init()
-add_executable(test main.cpp WCH_Debug.cpp)
+add_executable(test main.cpp WCH_Debug.cpp gdb_server.cpp utils.cpp)
 
 pico_generate_pio_header(test ${CMAKE_CURRENT_LIST_DIR}/singlewire.pio)
 
