@@ -191,8 +191,6 @@ void GDBServer::handle_m() {
     return;
   }
 
-  //log("\nhandle_m %x %x\n", addr, size);
-
   if (size == 4) {
     send.start_packet();
     send.put_u32(sl->get_mem(addr));
@@ -214,8 +212,29 @@ void GDBServer::handle_m() {
 // Write memory
 
 void GDBServer::handle_M() {
-  // FIXME write data
-  send.set_packet("");
+  recv.skip_char('M');
+  int addr = recv.get_hex();
+  recv.skip_char(',');
+  int len = recv.get_hex();
+  recv.skip_char(':');
+
+  // FIXME handle non-aligned, non-dword writes?
+  if (recv.error || (len % 4) || (addr % 4)) {
+    send.set_packet("");
+    return;
+  }
+
+  for (int i = 0; i < len/4; i++) {
+    sl->put_mem(addr, recv.get_hex());
+    addr += 4;
+  }
+
+  if (recv.error) {
+    send.set_packet("");
+  }
+  else {
+    send.set_packet("OK");
+  }
 }
 
 //----------
