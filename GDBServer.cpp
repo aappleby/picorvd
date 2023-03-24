@@ -180,23 +180,33 @@ void GDBServer::handle_k() {
 void GDBServer::handle_m() {
   recv.skip_char('m');
 
-  if (recv.error) log("\nfail 1\n");
 
   int addr = recv.get_hex();
-  if (recv.error) log("\nfail 2\n");
-
   recv.skip_char(',');
-  if (recv.error) log("\nfail 3\n");
   int size = recv.get_hex();
-  if (recv.error) log("\nfail 4\n");
 
-  if (!recv.error) {
-    // FIXME send data
-    send.set_packet("");
-  }
-  else {
+  if (recv.error) {
     log("\nhandle_m %x %x - recv.error '%s'\n", addr, size, recv.buf);
     send.set_packet("");
+    return;
+  }
+
+  //log("\nhandle_m %x %x\n", addr, size);
+
+  if (size == 4) {
+    send.start_packet();
+    send.put_u32(sl->get_mem(addr));
+    send.end_packet();
+  }
+  else {
+    uint32_t buf[256];
+    sl->get_block(addr, buf, size/4);
+
+    send.start_packet();
+    for (int i = 0; i < size/4; i++) {
+      send.put_u32(buf[i]);
+    }
+    send.end_packet();
   }
 }
 
