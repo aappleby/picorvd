@@ -358,8 +358,8 @@ void GDBServer::loop() {
     recv.clear();
     while (1) {
       char c = get_byte();
-      recv.put_buf(c == '#' ? 0 : c);
       if (c == '#') break;
+      recv.put_buf(c);
     }
 
     packet_count++;
