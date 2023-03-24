@@ -346,10 +346,10 @@ void GDBServer::loop() {
 
   while(1) {
 
-    static int max_packets = 4;
-    static int packet_count = 0;
+    //static int max_packets = 4;
+    //static int packet_count = 0;
 
-    if (packet_count == max_packets) while(1);
+    //if (packet_count == max_packets) while(1);
 
     // Wait for start char
     while (get_byte() != '$');
@@ -362,7 +362,7 @@ void GDBServer::loop() {
       recv.put_buf(c);
     }
 
-    packet_count++;
+    //packet_count++;
 
     char expected_checksum = 0;
     expected_checksum = (expected_checksum << 4) | from_hex(get_byte());
@@ -418,7 +418,10 @@ void GDBServer::loop() {
         put_byte(send.buf[i]);
       }
 
-      char c = get_byte();
+      char c = 0;
+      do { c = get_byte(); }
+      while (c != '+' && c != '-');
+
       if (c == '+') {
         break;
       }
