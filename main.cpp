@@ -6,9 +6,9 @@
 #include "pico/binary_info.h"
 #include "build/singlewire.pio.h"
 #include "hardware/clocks.h"
-#include "WCH_Debug.h"
+#include "SLDebugger.h"
 #include "log.h"
-#include "gdb_server.h"
+#include "GDBServer.h"
 #include "utils.h"
 
 const uint SWD_PIN = 14;
@@ -45,21 +45,6 @@ char usb_get() {
   }
   // should never get here...
   return 0;
-}
-
-
-//------------------------------------------------------------------------------
-
-void usb_printf(const char* fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-  vprint_to(usb_put, fmt, args);
-}
-
-void ser_printf(const char* fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-  vprint_to(ser_put, fmt, args);
 }
 
 //------------------------------------------------------------------------------
@@ -116,60 +101,54 @@ unsigned int blink_bin_len = 548;
 
 //------------------------------------------------------------------------------
 
+Log dblog(ser_put);
+SLDebugger sl;
+GDBServer server(&sl, usb_get, usb_put, dblog);
+
 int main() {
   stdio_usb_init();
 
-  Log log(ser_put);
-
   // Enable non-USB serial port on gpio 0/1 for meta-debug output :D
-  uart_init(uart0, 3000000);
+  uart_init(uart0, 500000);
   gpio_set_function(0, GPIO_FUNC_UART);
-  gpio_set_function(1, GPIO_FUNC_UART);  
+  gpio_set_function(1, GPIO_FUNC_UART);
 
   // Wait for Minicom to finish connecting before sending clear screen etc
   //sleep_ms(100);
 
-  //SLDebugger sl;
-  //sl.init(SWD_PIN, usb_printf);
-  //sl.reset();
-
-  char command[256] = {0};
-  uint8_t cursor = 0;
+  sl.init(SWD_PIN, usb_put);
+  sl.reset();
 
   //log("\033[2J");
-  log("PicoDebug 0.0.2\n");
-  log("<debug log begin>\n");
-
-  /*
-  while(1) {
-    auto c = usb_get();
-    ser_put(c);
-  }
-  */
+  dblog("PicoDebug 0.0.2\n");
+  dblog("<debug log begin>\n");
 
   //while(!stdio_usb_connected());
   //log("stdio_usb_connected()\n");
 
-  GDBServer server(usb_get, usb_put, log);
   server.loop();
 
 #if 0
+
+  char command[256] = {0};
+  uint8_t cursor = 0;
+
   while(1) {
-    usb_printf("> ");
+    print_to(usb_put, "> ");
     while(1) {
       auto c = getchar();
       if (c == 8) {
-        usb_printf("\b \b");
+        print_to(usb_put, "\b \b");
         cursor--;
         command[cursor] = 0;
       }
       else if (c == '\n' || c == '\r') {
         command[cursor] = 0;
-        usb_printf("\n");
+        print_to(usb_put, "\n");
         break;
       }
       else {
-        usb_printf("%c", c);
+        print_to(usb_put, "%c", c);
         command[cursor++] = c;
       }
     }
@@ -190,7 +169,7 @@ int main() {
     }
 
     uint32_t time_b = time_us_32();
-    usb_printf("Command took %d us\n", time_b - time_a);
+    print_to(usb_put, "Command took %d us\n", time_b - time_a);
 
     cursor = 0;
     command[cursor] = 0;

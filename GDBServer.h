@@ -1,14 +1,16 @@
 #pragma once
 #include "utils.h"
 #include "log.h"
+#include "SLDebugger.h"
+#include "GDBPacket.h"
 
 //------------------------------------------------------------------------------
 
 struct GDBServer {
 public:
 
-  GDBServer(getter cb_get, putter cb_put, Log log)
-  : cb_get(cb_get), cb_put(cb_put), log(log) {}
+  GDBServer(SLDebugger* sl, getter cb_get, putter cb_put, Log log)
+  : sl(sl), cb_get(cb_get), cb_put(cb_put), log(log) {}
 
   void loop();
 
@@ -26,22 +28,6 @@ private:
 
   void put_byte(char b);
   char get_byte();
-
-  void packet_start();
-  void packet_data(const char* buf, int len);
-  void packet_string(const char* buf);
-  void packet_u8(char x);
-  void packet_u32(int x);
-  void packet_end();
-  bool wait_packet_ack();
-
-  void send_packet(const char* packet, int len);
-  void send_packet(const char* packet);
-  void send_ack();
-  void send_nack();
-  void send_ok();
-  void send_empty();
-  void send_nothing();
 
   void handle_questionmark();
   void handle_bang();
@@ -73,8 +59,6 @@ private:
   void handle_vKill();
   void handle_vMustReplyEmpty();
 
-  void dispatch_command();
-
 private:
 
   enum {
@@ -88,19 +72,17 @@ private:
     WAIT_ACK,
   };
 
+  SLDebugger* sl;
   Log    log;
   getter cb_get = nullptr;
   putter cb_put = nullptr;
+  bool   sending = true;
 
-  int     state = WAIT_FOR_START;
-  int     serial_fd = 0;
-  char    packet[512];
-  int     packet_size = 0;
-  char*   packet_cursor = 0;
-  char    send_checksum = 0;
-  char    recv_checksum = 0;
+  int    state = WAIT_FOR_START;
+  int    serial_fd = 0;
 
-  bool sending = true;
+  GDBPacket send;
+  GDBPacket recv;
 };
 
 //------------------------------------------------------------------------------

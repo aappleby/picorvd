@@ -1,4 +1,5 @@
-#include "WCH_Debug.h"
+#include "SLDebugger.h"
+#include "WCH_Regs.h"
 
 #include "build/singlewire.pio.h"
 

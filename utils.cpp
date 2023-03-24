@@ -31,6 +31,13 @@ int from_hex(char c) {
   return -1;
 }
 
+bool from_hex(char c, int& out) {
+  if (c >= '0' && c <= '9') { out = c - '0';      return true; }
+  if (c >= 'a' && c <= 'f') { out = 10 + c - 'a'; return true; }
+  if (c >= 'A' && c <= 'F') { out = 10 + c - 'A'; return true; }
+  return false;
+}
+
 //------------------------------------------------------------------------------
 
 int cmp(const char* prefix, const char* text) {
@@ -61,4 +68,50 @@ int _atoi(const char* cursor) {
     accum += *cursor++ - '0';
   }
   return sign * accum;
+}
+
+bool atoi2(const char* cursor, int& out) {
+  int sign = 1;
+  if (*cursor == '-') {
+    sign = -1;
+    cursor++;
+  }
+
+  bool any_digits = false;
+  int accum = 0;
+  while(*cursor) {
+    if (*cursor < '0' || *cursor > '9') break;
+    any_digits = true;
+    accum *= 10;
+    accum += *cursor++ - '0';
+  }
+
+  if (any_digits) {
+    out = sign * accum;
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
+char* atox(char* cursor, int& out) {
+  if (!cursor) return cursor;
+
+  int sign = 1;
+  if (*cursor == '-') {
+    sign = -1;
+    cursor++;
+  }
+
+  bool any_digits = false;
+  int accum = 0;
+  int digit = 0;
+  while(from_hex(*cursor, digit)) {
+    any_digits = true;
+    accum = (accum << 4) | digit;
+    cursor++;
+  }
+  out = sign * accum;
+  return any_digits ? cursor : nullptr;
 }

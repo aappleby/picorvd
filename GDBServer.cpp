@@ -1,5 +1,6 @@
-#include "gdb_server.h"
+#include "GDBServer.h"
 #include "utils.h"
+#include "WCH_Regs.h"
 
 //------------------------------------------------------------------------------
 /*
@@ -47,7 +48,6 @@ const int GDBServer::handler_count = sizeof(GDBServer::handler_tab) / sizeof(GDB
 //------------------------------------------------------------------------------
 
 void GDBServer::put_byte(char b) {
-  send_checksum += b;
   cb_put(b);
 
   if (!sending) {
@@ -55,7 +55,12 @@ void GDBServer::put_byte(char b) {
     sending = true;
   }
 
-  log("%c", b);
+  if (b) {
+    log("%c", b);
+  }
+  else {
+    log("\0");
+  }
 }
 
 char GDBServer::get_byte() {
@@ -66,127 +71,61 @@ char GDBServer::get_byte() {
     sending = false;
   }
 
-  log("%c", b);
-  recv_checksum += b;
+  if (b) {
+    log("%c", b);
+  }
+  else {
+    log("\0");
+  }
+
   return b;
 }
-
-//------------------------------------------------------------------------------
-
-void GDBServer::packet_start() {
-  put_byte('$');
-  send_checksum = 0;
-}
-
-void GDBServer::packet_data(const char* buf, int len) {
-  for (int i = 0; i < len; i++) {
-    put_byte(packet[i]);
-  }
-}
-
-void GDBServer::packet_string(const char* buf) {
-  while(*buf) {
-    put_byte(*buf++);
-  }
-}
-
-void GDBServer::packet_u8(char x) {
-  put_byte(to_hex((x >> 4) & 0xF));
-  put_byte(to_hex((x >> 0) & 0xF));
-}
-
-void GDBServer::packet_u32(int x) {
-  packet_u8(x >> 0);
-  packet_u8(x >> 8);
-  packet_u8(x >> 16);
-  packet_u8(x >> 24);
-}
-
-void GDBServer::packet_end() {
-  char old_checksum = send_checksum;
-  put_byte('#');
-  packet_u8(old_checksum);
-}
-
-bool GDBServer::wait_packet_ack() {
-  //log("wait_packet_ack()\n");
-  char c = 0;
-  do { c = get_byte(); }
-  while (c != '+' && c != '-');
-  /*
-  if (c == '-') {
-    LOG_R("==============================\n");
-    LOG_R("===========  NACK  ===========\n");
-    LOG_R("==============================\n");
-  }
-  */
-  //log("wait_packet_ack() done\n");
-  return c == '+';
-}
-
-//------------------------------------------------------------------------------
-
-void GDBServer::send_packet(const char* packet) {
-  while(1) {
-    packet_start();
-    packet_string(packet);
-    packet_end();
-    if (wait_packet_ack()) break;
-  }
-}
-
-void GDBServer::send_ack()     { put_byte('+'); }
-void GDBServer::send_nack()    { put_byte('-'); }
-void GDBServer::send_ok()      { send_packet("OK"); }
-void GDBServer::send_empty()   { send_packet(""); }
-void GDBServer::send_nothing() { }
 
 //------------------------------------------------------------------------------
 // Report why the CPU halted
 
 void GDBServer::handle_questionmark() {
   //  SIGINT = 2
-  send_packet("T02");
+  send.set_packet("T02");
 }
 
 //----------
 // Enable extended mode
 
 void GDBServer::handle_bang() {
-  send_ok();
+  send.set_packet("OK");
 }
 
 //----------
 // Break
 
 void GDBServer::handle_ctrlc() {
-  send_ok();
+  send.set_packet("OK");
 }
 
 //----------
 // Continue
 
 void GDBServer::handle_c() {
-  send_empty();
+  send.set_packet("");
 }
 
 //----------
 
 void GDBServer::handle_D() {
-  send_ok();
+  send.set_packet("OK");
 }
 
 //----------
 // Read general registers
 
 void GDBServer::handle_g() {
-  packet_start();
-  // RV32E registers
+  send.start_packet();
   for (int i = 0; i < 16; i++) {
-    packet_u32(0xF00D0000 + i);
+    send.put_u32(sl->get_gpr(i));
   }
-  packet_u32(0x00400020); // PC
-  packet_end();
+  send.put_u32(sl->get_csr(CSR_DPC));
+  send.end_packet();
 }
 
 //----------
@@ -201,23 +140,24 @@ void GDBServer::handle_G() {
   packet_u32(0x00400020); // main() in basic
   packet_end();
   */
+
+  send.set_packet("");
 }
 
 //----------
 // Set thread for subsequent operations
 
 void GDBServer::handle_H() {
-  /*
-  packet_cursor++;
-  int thread_id = _atoi(packet_cursor);
-  if (thread_id == 0 || thread_id == 1) {
-    send_ok();
+  recv.skip_char('H');
+  recv.skip(1);
+  int thread_id = recv.get_hex();
+
+  if (!recv.error) {
+    send.set_packet("OK");
+    return;
   }
-  else {
-    send_packet("E01");
-  }
-  */
-  send_ok();
+
+  send.set_packet("E01");
 }
 
 //----------
@@ -231,33 +171,55 @@ void GDBServer::handle_k() {
 // Read memory
 
 void GDBServer::handle_m() {
-  send_empty();
+  recv.skip_char('m');
+
+  if (recv.error) log("\nfail 1\n");
+
+  int addr = recv.get_hex();
+  if (recv.error) log("\nfail 2\n");
+
+  recv.skip_char(',');
+  if (recv.error) log("\nfail 3\n");
+  int size = recv.get_hex();
+  if (recv.error) log("\nfail 4\n");
+
+  if (!recv.error) {
+    // FIXME send data
+    send.set_packet("");
+  }
+  else {
+    log("\nhandle_m %x %x - recv.error '%s'\n", addr, size, recv.buf);
+    send.set_packet("");
+  }
 }
 
 //----------
 // Write memory
 
 void GDBServer::handle_M() {
-  send_empty();
+  // FIXME write data
+  send.set_packet("");
 }
 
 //----------
 // Read the value of register N
 
 void GDBServer::handle_p() {
-  packet_cursor++;
-  // FIXME are we sure this is hex? I think it is...
-  int hi = from_hex(*packet_cursor++);
-  int lo = from_hex(*packet_cursor++);
-  packet_start();
-  packet_u32(0xF00D0000 + ((hi << 4) | lo));
-  packet_end();
+  recv.skip_char('p');
+  int gpr = recv.get_hex();
+
+  if (!recv.error) {
+    send.start_packet();
+    send.put_u32(sl->get_gpr(gpr));
+    send.end_packet();
+  }
 }
 
 //----------
 // Write the value of register N
 
 void GDBServer::handle_P() {
+  send.set_packet("");
 }
 
 //----------
@@ -269,7 +231,8 @@ void GDBServer::handle_qAttached() {
   // ‘1’ The remote server attached to an existing process.
   // ‘0’ The remote server created a new process.
   // ‘E NN’ A badly formed request or an error was encountered.
-  send_packet("1");
+
+  send.set_packet("1");
 }
 
 //----------
@@ -278,14 +241,17 @@ void GDBServer::handle_qAttached() {
 void GDBServer::handle_qC() {
   // -> qC
   // Return current thread ID
-  // Reply: ‘QC thread-id’
-  send_packet("QC 1");
+  // Reply: ‘QC<thread-id>’
+
+  send.set_packet("QC0");
 }
 
 //----------
+// Get section offsets that the target used when relocating the downloaded
+// image. We don't have any offsets.
 
 void GDBServer::handle_qOffsets() {
-  send_empty();
+  send.set_packet("");
 }
 
 //----------
@@ -296,14 +262,14 @@ void GDBServer::handle_qL() {
   // qL1200000000000000000
   // qL 1 20 00000000 00000000
   // not sure if this is correct.
-  send_packet("qM 01 1 00000000 00000001");
+  send.set_packet("qM 01 1 00000000 00000001");
 }
 
 //----------
 // Query trace status
 
 void GDBServer::handle_qTStatus() {
-  send_packet("T0");
+  send.set_packet("T0");
 }
 
 //----------
@@ -311,7 +277,7 @@ void GDBServer::handle_qTStatus() {
 
 void GDBServer::handle_qfThreadInfo() {
   // Only one thread with id 1.
-  send_packet("m 1");
+  send.set_packet("m0");
 }
 
 //----------
@@ -319,70 +285,58 @@ void GDBServer::handle_qfThreadInfo() {
 
 void GDBServer::handle_qsThreadInfo() {
   // Only one thread with id 1.
-  send_packet("l");
+  send.set_packet("l");
 }
 
 //----------
 
 void GDBServer::handle_qSupported() {
   // Tell GDB stuff we support (nothing)
-  send_empty();
+  send.set_packet("");
 }
 
 //----------
 
 void GDBServer::handle_qSymbol() {
-  send_ok();
+  send.set_packet("OK");
 }
 
 //----------
 
 void GDBServer::handle_qTfP() {
-  send_empty();
+  send.set_packet("");
 }
 
 //----------
 
 void GDBServer::handle_qTfV() {
-  send_empty();
+  send.set_packet("");
 }
 
 //----------
 // Step
 
 void GDBServer::handle_s() {
+  send.set_packet("");
 }
 
 //----------
 // Resume, with different actions for each thread
 
 void GDBServer::handle_vCont() {
+  send.set_packet("");
 }
 
 //----------
 
 void GDBServer::handle_vKill() {
-  send_ok();
+  send.set_packet("OK");
 }
 
 //----------
 
 void GDBServer::handle_vMustReplyEmpty() {
-  send_empty();
-}
-
-//------------------------------------------------------------------------------
-
-void GDBServer::dispatch_command() {
-  for (int i = 0; i < handler_count; i++) {
-    if (cmp(handler_tab[i].name, packet) == 0) {
-      (*this.*handler_tab[i].handler)();
-      return;
-    }
-  }
-
-  log("   No handler for command %s\n", packet);
-  send_empty();
+  send.set_packet("");
 }
 
 //------------------------------------------------------------------------------
@@ -390,74 +344,94 @@ void GDBServer::dispatch_command() {
 void GDBServer::loop() {
   log("GDBServer::loop()\n");
 
-  //print_to(cb_put, "GDBServer::loop() cb_put\n");
-
   while(1) {
-    //char c = get_byte();
-    //if (c == '$') log("\n");
-    //log("%c", c);
 
-    packet_size = 0;
-    packet_cursor = packet;
-    char c;
+    static int max_packets = 4;
+    static int packet_count = 0;
+
+    if (packet_count == max_packets) while(1);
+
+    // Wait for start char
+    while (get_byte() != '$');
+
+    // Add bytes to packet until we see the end char
+    recv.clear();
+    while (1) {
+      char c = get_byte();
+      recv.put_buf(c == '#' ? 0 : c);
+      if (c == '#') break;
+    }
+
+    packet_count++;
 
     char expected_checksum = 0;
-    char actual_checksum = 0;
+    expected_checksum = (expected_checksum << 4) | from_hex(get_byte());
+    expected_checksum = (expected_checksum << 4) | from_hex(get_byte());
 
-    while (1) {
-      c = get_byte();
-      if (c == '$') {
-        break;
+    if (recv.checksum != expected_checksum) {
+      log("\n");
+      log("Packet transmission error\n");
+      log("expected checksum 0x%02x\n", expected_checksum);
+      log("actual checksum   0x%02x\n", recv.checksum);
+      put_byte('-');
+      continue;
+    }
+    else {
+      //log("\n");
+      //log("packet checksum ok\n");
+      //log("packet received %s\n", recv.buf);
+      //log("packet size %d\n", recv.size);
+      //log("packet cursor %d\n", recv.cursor);
+      //log("packet sentinel1 %x\n", recv.sentinel1);
+      //log("packet sentinel2 %x\n", recv.sentinel2);
+    }
+
+    // Packet checksum OK, handle it.
+    put_byte('+');
+
+#if 1
+    recv.cursor = 0;
+
+    handler_func h = nullptr;
+    for (int i = 0; i < handler_count; i++) {
+      if (cmp(handler_tab[i].name, recv.buf) == 0) {
+        h = handler_tab[i].handler;
       }
     }
 
-    //log("saw $\n");
+    if (h) {
+      send.clear();
+      (*this.*h)();
+    }
+    else {
+      log("No handler for command %s\n", recv.buf);
+      send.set_packet("");
+    }
 
-    while (1) {
-      c = get_byte();
+    if (!send.packet_valid) {
+      log("Handler created a bad packet '%s'\n", send.buf);
+      send.set_packet("");
+    }
 
-      //if (c == '$') log("\n");
-      //log("%c", c);
+    while(1) {
+      for (int i = 0; i < send.size; i++) {
+        put_byte(send.buf[i]);
+      }
 
-      if (c == '#') {
-        packet[packet_size] = 0;
+      char c = get_byte();
+      if (c == '+') {
         break;
       }
       else {
-        actual_checksum += c;
-        packet[packet_size++] = c;
+        log("ack char %d '%c'\n", c, c);
       }
-    }
 
-    for (int digits = 0; digits < 2; digits++) {
-      while (1) {
-        c = get_byte();
-        int d = from_hex(c);
-        if (d == -1) {
-          log("bad hex %c\n", c);
-          continue;
-        }
-        else {
-          expected_checksum = (expected_checksum << 4) | d;
-          break;
-        }
-      }
+      //log("==============================\n");
+      //log("==========  NACK %c ==========\n", c);
+      //log("==============================\n");
     }
+#endif
 
-    if (actual_checksum != expected_checksum) {
-      //log("==>> %s\n", packet);
-      log.R("Packet transmission error\n");
-      log.R("expected checksum 0x%02x\n", expected_checksum);
-      log.R("actual checksum   0x%02x\n", actual_checksum);
-      send_nack();
-      continue;
-    } else {
-      //log("==>> %s\n", packet);
-      send_ack();
-      //log("<<== ");
-      dispatch_command();
-      //log("\n");
-    }
   }
 }
 
