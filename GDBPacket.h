@@ -118,7 +118,6 @@ struct GDBPacket {
 
   void start_packet() {
     clear();
-    put_buf('$');
     checksum = 0;
   }
 
@@ -145,9 +144,6 @@ struct GDBPacket {
   }
 
   void end_packet() {
-    char old_checksum = checksum;
-    put_buf('#');
-    put_u8(old_checksum);
     packet_valid = true;
   }
 

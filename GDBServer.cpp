@@ -48,6 +48,7 @@ const int GDBServer::handler_count = sizeof(GDBServer::handler_tab) / sizeof(GDB
 //------------------------------------------------------------------------------
 
 void GDBServer::put_byte(char b) {
+
   cb_put(b);
 
   if (!sending) {
@@ -77,6 +78,12 @@ char GDBServer::get_byte() {
   else {
     log("\0");
   }
+
+  /*
+  if (b == '}') {
+    return get_byte() ^ 0x20;
+  }
+  */
 
   return b;
 }
@@ -355,18 +362,24 @@ void GDBServer::loop() {
     while (get_byte() != '$');
 
     // Add bytes to packet until we see the end char
-    recv.clear();
-    while (1) {
-      char c = get_byte();
-      if (c == '#') break;
-      recv.put_buf(c);
-    }
-
-    //packet_count++;
-
     char expected_checksum = 0;
-    expected_checksum = (expected_checksum << 4) | from_hex(get_byte());
-    expected_checksum = (expected_checksum << 4) | from_hex(get_byte());
+    {
+      recv.clear();
+      while (1) {
+        char c = get_byte();
+        if (c == '#') {
+          break;
+        }
+        else if (c == '}') {
+          recv.put_buf(get_byte() ^ 0x20);
+        }
+        else {
+          recv.put_buf(c);
+        }
+      }
+      expected_checksum = (expected_checksum << 4) | from_hex(get_byte());
+      expected_checksum = (expected_checksum << 4) | from_hex(get_byte());
+    }
 
     if (recv.checksum != expected_checksum) {
       log("\n");
@@ -414,9 +427,30 @@ void GDBServer::loop() {
     }
 
     while(1) {
+
+      // The binary data representation uses 7d (ASCII ‘}’) as an escape character.
+      // Any escaped byte is transmitted as the escape character followed by the
+      // original character XORed with 0x20. For example, the byte 0x7d would be
+      // transmitted as the two bytes 0x7d 0x5d. The bytes 0x23 (ASCII ‘#’), 0x24
+      //(ASCII ‘$’), and 0x7d (ASCII ‘}’) must always be escaped. Responses sent by
+      // the stub must also escape 0x2a (ASCII ‘*’), so that it is not interpreted
+      // as the start of a run-length encoded sequence (described next).
+
+      put_byte('$');
       for (int i = 0; i < send.size; i++) {
-        put_byte(send.buf[i]);
+        char c = send.buf[i];
+        if (c == '#' || c == '$' || c == '}' || c == '*') {
+          put_byte('}');
+          put_byte(c ^ 0x20);
+        }
+        else {
+          put_byte(c);
+        }
       }
+      put_byte('#');
+      put_byte(to_hex((send.checksum >> 4) & 0xF));
+      put_byte(to_hex((send.checksum >> 0) & 0xF));
+
 
       char c = 0;
       do { c = get_byte(); }
