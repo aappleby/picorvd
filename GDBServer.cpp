@@ -2,6 +2,16 @@
 #include "utils.h"
 #include "WCH_Regs.h"
 
+const char* memory_map = R"(<?xml version="1.0"?>
+<!DOCTYPE memory-map PUBLIC "+//IDN gnu.org//DTD GDB Memory Map V1.0//EN" "http://sourceware.org/gdb/gdb-memory-map.dtd">
+<memory-map>
+  <memory type="flash" start="0x00000000" length="0x4000">
+    <property name="blocksize">64</property>
+  </memory>
+  <memory type="ram" start="0x20000000" length="0x800"/>
+</memory-map>
+)";
+
 //------------------------------------------------------------------------------
 /*
 At a minimum, a stub is required to support the ‘?’ command to tell GDB the
@@ -13,6 +23,12 @@ Stubs that support multi-threading targets should support the ‘vCont’ comman
 All other commands are optional.
 */
 
+/*
+‘vFlashErase:addr,length’
+‘vFlashWrite:addr:XX...’
+‘vFlashDone’
+*/
+
 const GDBServer::handler GDBServer::handler_tab[] = {
   { "?",               &GDBServer::handle_questionmark },
   { "!",               &GDBServer::handle_bang },
@@ -20,27 +36,17 @@ const GDBServer::handler GDBServer::handler_tab[] = {
   { "c",               &GDBServer::handle_c },
   { "D",               &GDBServer::handle_D },
   { "g",               &GDBServer::handle_g },
+  { "G",               &GDBServer::handle_G },
   { "H",               &GDBServer::handle_H },
   { "k",               &GDBServer::handle_k },
   { "m",               &GDBServer::handle_m },
   { "M",               &GDBServer::handle_M },
   { "p",               &GDBServer::handle_p },
   { "P",               &GDBServer::handle_P },
-  { "qAttached",       &GDBServer::handle_qAttached },
-  { "qC",              &GDBServer::handle_qC },
-  { "qfThreadInfo",    &GDBServer::handle_qfThreadInfo },
-  { "qL",              &GDBServer::handle_qL },
-  { "qOffsets",        &GDBServer::handle_qOffsets },
-  { "qsThreadInfo",    &GDBServer::handle_qsThreadInfo },
-  { "qSupported",      &GDBServer::handle_qSupported },
-  { "qSymbol",         &GDBServer::handle_qSymbol },
-  { "qTfP",            &GDBServer::handle_qTfP },
-  { "qTfV",            &GDBServer::handle_qTfV },
-  { "qTStatus",        &GDBServer::handle_qTStatus },
+  { "q",               &GDBServer::handle_q },
   { "s",               &GDBServer::handle_s },
-  { "vCont?",          &GDBServer::handle_vCont },
-  { "vKill",           &GDBServer::handle_vKill },
-  { "vMustReplyEmpty", &GDBServer::handle_vMustReplyEmpty },
+  { "R",               &GDBServer::handle_R },
+  { "v",               &GDBServer::handle_v },
 };
 
 const int GDBServer::handler_count = sizeof(GDBServer::handler_tab) / sizeof(GDBServer::handler_tab[0]);
@@ -48,7 +54,6 @@ const int GDBServer::handler_count = sizeof(GDBServer::handler_tab) / sizeof(GDB
 //------------------------------------------------------------------------------
 
 void GDBServer::put_byte(char b) {
-
   cb_put(b);
 
   if (!sending) {
@@ -58,8 +63,7 @@ void GDBServer::put_byte(char b) {
 
   if (b) {
     log("%c", b);
-  }
-  else {
+  } else {
     log("\0");
   }
 }
@@ -74,16 +78,9 @@ char GDBServer::get_byte() {
 
   if (b) {
     log("%c", b);
-  }
-  else {
+  } else {
     log("\0");
   }
-
-  /*
-  if (b == '}') {
-    return get_byte() ^ 0x20;
-  }
-  */
 
   return b;
 }
@@ -96,34 +93,34 @@ void GDBServer::handle_questionmark() {
   send.set_packet("T02");
 }
 
-//----------
+//------------------------------------------------------------------------------
 // Enable extended mode
 
 void GDBServer::handle_bang() {
   send.set_packet("OK");
 }
 
-//----------
+//------------------------------------------------------------------------------
 // Break
 
 void GDBServer::handle_ctrlc() {
   send.set_packet("OK");
 }
 
-//----------
-// Continue
+//------------------------------------------------------------------------------
+// Continue - "c<addr>"
 
 void GDBServer::handle_c() {
   send.set_packet("");
 }
 
-//----------
+//------------------------------------------------------------------------------
 
 void GDBServer::handle_D() {
   send.set_packet("OK");
 }
 
-//----------
+//------------------------------------------------------------------------------
 // Read general registers
 
 void GDBServer::handle_g() {
@@ -151,39 +148,37 @@ void GDBServer::handle_G() {
   send.set_packet("");
 }
 
-//----------
+//------------------------------------------------------------------------------
 // Set thread for subsequent operations
 
 void GDBServer::handle_H() {
-  recv.skip_char('H');
+  recv.take('H');
   recv.skip(1);
-  int thread_id = recv.get_hex();
+  int thread_id = recv.take_hex();
 
-  if (!recv.error) {
-    send.set_packet("OK");
-    return;
+  if (recv.error) {
+    send.set_packet("E01");
   }
-
-  send.set_packet("E01");
+  else {
+    send.set_packet("OK");
+  }
 }
 
-//----------
+//------------------------------------------------------------------------------
 // Kill
 
 void GDBServer::handle_k() {
   // 'k' always kills the target and explicitly does _not_ have a reply.
 }
 
-//----------
+//------------------------------------------------------------------------------
 // Read memory
 
 void GDBServer::handle_m() {
-  recv.skip_char('m');
-
-
-  int addr = recv.get_hex();
-  recv.skip_char(',');
-  int size = recv.get_hex();
+  recv.take('m');
+  int addr = recv.take_hex();
+  recv.take(',');
+  int size = recv.take_hex();
 
   if (recv.error) {
     log("\nhandle_m %x %x - recv.error '%s'\n", addr, size, recv.buf);
@@ -208,15 +203,17 @@ void GDBServer::handle_m() {
   }
 }
 
-//----------
+//------------------------------------------------------------------------------
 // Write memory
 
+// GDB also uses this for flash write?
+
 void GDBServer::handle_M() {
-  recv.skip_char('M');
-  int addr = recv.get_hex();
-  recv.skip_char(',');
-  int len = recv.get_hex();
-  recv.skip_char(':');
+  recv.take('M');
+  int addr = recv.take_hex();
+  recv.take(',');
+  int len = recv.take_hex();
+  recv.take(':');
 
   // FIXME handle non-aligned, non-dword writes?
   if (recv.error || (len % 4) || (addr % 4)) {
@@ -225,7 +222,7 @@ void GDBServer::handle_M() {
   }
 
   for (int i = 0; i < len/4; i++) {
-    sl->put_mem(addr, recv.get_hex());
+    sl->put_mem(addr, recv.take_hex());
     addr += 4;
   }
 
@@ -237,12 +234,12 @@ void GDBServer::handle_M() {
   }
 }
 
-//----------
+//------------------------------------------------------------------------------
 // Read the value of register N
 
 void GDBServer::handle_p() {
-  recv.skip_char('p');
-  int gpr = recv.get_hex();
+  recv.take('p');
+  int gpr = recv.take_hex();
 
   if (!recv.error) {
     send.start_packet();
@@ -258,121 +255,119 @@ void GDBServer::handle_P() {
   send.set_packet("");
 }
 
-//----------
-// Query what GDB is attached to
+//------------------------------------------------------------------------------
 
-void GDBServer::handle_qAttached() {
-  // -> qAttached
-  // Reply:
-  // ‘1’ The remote server attached to an existing process.
-  // ‘0’ The remote server created a new process.
-  // ‘E NN’ A badly formed request or an error was encountered.
+void GDBServer::handle_q() {
+  if (recv.match("qAttached")) {
+  // Query what GDB is attached to
+    // Reply:
+    // ‘1’ The remote server attached to an existing process.
+    // ‘0’ The remote server created a new process.
+    // ‘E NN’ A badly formed request or an error was encountered.
+    send.set_packet("1");
+  }
+  else if (recv.match("qC")) {
+    // -> qC
+    // Return current thread ID
+    // Reply: ‘QC<thread-id>’
+    send.set_packet("QC0");
+  }
+  else if (recv.match("qL")) {
+    // Query thread information from RTOS
+    // FIXME get arg
+    // qL1200000000000000000
+    // qL 1 20 00000000 00000000
+    // not sure if this is correct.
+    send.set_packet("qM 01 1 00000000 00000001");
+  }
+  else if (recv.match("qOffsets")) {
+    // Get section offsets that the target used when relocating the downloaded
+    // image. We don't have any offsets.
+    send.set_packet("");
+  }
+  else if (recv.match("qTStatus")) {
+    // Query trace status
+    send.set_packet("T0");
+  }
+  else if (recv.match("qfThreadInfo")) {
+    // Query all active thread IDs
+    send.set_packet("m0");
+  }
+  else if (recv.match("qsThreadInfo")) {
+    // Query all active thread IDs, continued
+    send.set_packet("l");
+  }
+  else if (recv.match("qSupported")) {
+    send.set_packet("PacketSize=32768;qXfer:memory-map:read+");
+  }
+  else if (recv.match("qXfer:")) {
+    if (recv.match("memory-map:read::")) {
+      int offset = recv.take_hex();
+      recv.take(',');
+      int length = recv.take_hex();
 
-  send.set_packet("1");
+      if (recv.error) {
+        send.set_packet("E00");
+      }
+      else {
+        send.start_packet();
+        send.put_str("l");
+        send.put_str(memory_map);
+        send.end_packet();
+      }
+    }
+
+    // FIXME handle other xfer packets
+  }
+  else {
+    send.set_packet("");
+  }
 }
 
-//----------
-// Query thread ID
+//------------------------------------------------------------------------------
+// Restart
 
-void GDBServer::handle_qC() {
-  // -> qC
-  // Return current thread ID
-  // Reply: ‘QC<thread-id>’
-
-  send.set_packet("QC0");
-}
-
-//----------
-// Get section offsets that the target used when relocating the downloaded
-// image. We don't have any offsets.
-
-void GDBServer::handle_qOffsets() {
+void GDBServer::handle_R() {
   send.set_packet("");
 }
 
-//----------
-// Query thread information from RTOS
-
-void GDBServer::handle_qL() {
-  // FIXME get arg
-  // qL1200000000000000000
-  // qL 1 20 00000000 00000000
-  // not sure if this is correct.
-  send.set_packet("qM 01 1 00000000 00000001");
-}
-
-//----------
-// Query trace status
-
-void GDBServer::handle_qTStatus() {
-  send.set_packet("T0");
-}
-
-//----------
-// Query all active thread IDs
-
-void GDBServer::handle_qfThreadInfo() {
-  // Only one thread with id 1.
-  send.set_packet("m0");
-}
-
-//----------
-// Query all active thread IDs, continued
-
-void GDBServer::handle_qsThreadInfo() {
-  // Only one thread with id 1.
-  send.set_packet("l");
-}
-
-//----------
-
-void GDBServer::handle_qSupported() {
-  // Tell GDB stuff we support (nothing)
-  send.set_packet("");
-}
-
-//----------
-
-void GDBServer::handle_qSymbol() {
-  send.set_packet("OK");
-}
-
-//----------
-
-void GDBServer::handle_qTfP() {
-  send.set_packet("");
-}
-
-//----------
-
-void GDBServer::handle_qTfV() {
-  send.set_packet("");
-}
-
-//----------
+//------------------------------------------------------------------------------
 // Step
 
 void GDBServer::handle_s() {
   send.set_packet("");
 }
 
-//----------
-// Resume, with different actions for each thread
+//------------------------------------------------------------------------------
 
-void GDBServer::handle_vCont() {
-  send.set_packet("");
-}
+void GDBServer::handle_v() {
+  if (recv.match("vCont")) {
+    send.set_packet("");
+  }
+  else if (recv.match("vFlash")) {
+    if (recv.match("Erase")) {
+      recv.take(':');
+      int start = recv.take_hex();
+      recv.take(',');
+      int size = recv.take_hex();
 
-//----------
-
-void GDBServer::handle_vKill() {
-  send.set_packet("OK");
-}
-
-//----------
-
-void GDBServer::handle_vMustReplyEmpty() {
-  send.set_packet("");
+      if (recv.error) {
+        send.set_packet("E00");
+      }
+      else {
+        send.set_packet("OK");
+      }
+    }
+    else if (recv.match("Done")) {
+      send.set_packet("OK");
+    }
+  }
+  else if (recv.match("vKill")) {
+    send.set_packet("OK");
+  }
+  else if (recv.match("vMustReplyEmpty")) {
+    send.set_packet("");
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -382,33 +377,26 @@ void GDBServer::loop() {
 
   while(1) {
 
-    //static int max_packets = 4;
-    //static int packet_count = 0;
-
-    //if (packet_count == max_packets) while(1);
-
     // Wait for start char
     while (get_byte() != '$');
 
     // Add bytes to packet until we see the end char
-    char expected_checksum = 0;
-    {
-      recv.clear();
-      while (1) {
-        char c = get_byte();
-        if (c == '#') {
-          break;
-        }
-        else if (c == '}') {
-          recv.put_buf(get_byte() ^ 0x20);
-        }
-        else {
-          recv.put_buf(c);
-        }
+    recv.clear();
+    while (1) {
+      char c = get_byte();
+      if (c == '#') {
+        break;
       }
-      expected_checksum = (expected_checksum << 4) | from_hex(get_byte());
-      expected_checksum = (expected_checksum << 4) | from_hex(get_byte());
+      else if (c == '}') {
+        recv.put_buf(get_byte() ^ 0x20);
+      }
+      else {
+        recv.put_buf(c);
+      }
     }
+    char expected_checksum = 0;
+    expected_checksum = (expected_checksum << 4) | from_hex(get_byte());
+    expected_checksum = (expected_checksum << 4) | from_hex(get_byte());
 
     if (recv.checksum != expected_checksum) {
       log("\n");
@@ -418,21 +406,10 @@ void GDBServer::loop() {
       put_byte('-');
       continue;
     }
-    else {
-      //log("\n");
-      //log("packet checksum ok\n");
-      //log("packet received %s\n", recv.buf);
-      //log("packet size %d\n", recv.size);
-      //log("packet cursor %d\n", recv.cursor);
-      //log("packet sentinel1 %x\n", recv.sentinel1);
-      //log("packet sentinel2 %x\n", recv.sentinel2);
-    }
 
     // Packet checksum OK, handle it.
     put_byte('+');
 
-#if 1
-    recv.cursor = 0;
 
     handler_func h = nullptr;
     for (int i = 0; i < handler_count; i++) {
@@ -442,6 +419,7 @@ void GDBServer::loop() {
     }
 
     if (h) {
+      recv.cursor = 0;
       send.clear();
       (*this.*h)();
     }
@@ -455,49 +433,57 @@ void GDBServer::loop() {
       send.set_packet("");
     }
 
-    while(1) {
-
-      // The binary data representation uses 7d (ASCII ‘}’) as an escape character.
-      // Any escaped byte is transmitted as the escape character followed by the
-      // original character XORed with 0x20. For example, the byte 0x7d would be
-      // transmitted as the two bytes 0x7d 0x5d. The bytes 0x23 (ASCII ‘#’), 0x24
-      //(ASCII ‘$’), and 0x7d (ASCII ‘}’) must always be escaped. Responses sent by
-      // the stub must also escape 0x2a (ASCII ‘*’), so that it is not interpreted
-      // as the start of a run-length encoded sequence (described next).
-
-      put_byte('$');
-      for (int i = 0; i < send.size; i++) {
-        char c = send.buf[i];
-        if (c == '#' || c == '$' || c == '}' || c == '*') {
-          put_byte('}');
-          put_byte(c ^ 0x20);
-        }
-        else {
-          put_byte(c);
-        }
+    for (int retry = 0; retry < 5; retry++) {
+      if (send_packet()) break;
+      if (retry == 4) {
+        log("\nFailed to send packet after 5 retries\n");
       }
-      put_byte('#');
-      put_byte(to_hex((send.checksum >> 4) & 0xF));
-      put_byte(to_hex((send.checksum >> 0) & 0xF));
-
-
-      char c = 0;
-      do { c = get_byte(); }
-      while (c != '+' && c != '-');
-
-      if (c == '+') {
-        break;
-      }
-      else {
-        log("ack char %d '%c'\n", c, c);
-      }
-
-      //log("==============================\n");
-      //log("==========  NACK %c ==========\n", c);
-      //log("==============================\n");
     }
-#endif
+  }
+}
 
+//------------------------------------------------------------------------------
+// The binary data representation uses 7d (ASCII ‘}’) as an escape character.
+// Any escaped byte is transmitted as the escape character followed by the
+// original character XORed with 0x20. For example, the byte 0x7d would be
+// transmitted as the two bytes 0x7d 0x5d. The bytes 0x23 (ASCII ‘#’), 0x24
+//(ASCII ‘$’), and 0x7d (ASCII ‘}’) must always be escaped. Responses sent by
+// the stub must also escape 0x2a (ASCII ‘*’), so that it is not interpreted
+// as the start of a run-length encoded sequence (described next).
+
+bool GDBServer::send_packet() {
+
+  put_byte('$');
+  for (int i = 0; i < send.size; i++) {
+    char c = send.buf[i];
+    if (c == '#' || c == '$' || c == '}' || c == '*') {
+      put_byte('}');
+      put_byte(c ^ 0x20);
+    }
+    else {
+      put_byte(c);
+    }
+  }
+  put_byte('#');
+  put_byte(to_hex((send.checksum >> 4) & 0xF));
+  put_byte(to_hex((send.checksum >> 0) & 0xF));
+
+  while(1) {
+    char c = get_byte();
+    if (c == '+') {
+      return true;
+    }
+    else if (c == '-') {
+      log("========================\n");
+      log("========  NACK  ========\n");
+      log("========================\n");
+      return false;
+    }
+    else {
+      // FIXME - are we still seeing this? YES - nulls
+      //log("garbage ack char %d '%c'\n", c, c);
+      //return false;
+    }
   }
 }
 

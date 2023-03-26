@@ -258,48 +258,58 @@ void SLDebugger::put_mem(uint32_t addr, uint32_t data) {
 
 //-----------------------------------------------------------------------------
 
+static uint32_t prog_get_block[8] = {
+  0xe0000537, // lui    a0, 0xE0000
+  0x0f852583, // lw     a1, 0x0F8(a0) // data0 = *data1;
+  0x0005a583, // lw     a1, 0x000(a1)
+  0x0eb52a23, // sw     a1, 0x0F4(a0)
+  0x0f852583, // lw     a1, 0x0F8(a0) // data1 += 4
+  0x00458593, // addi   a1, a1, 4
+  0x0eb52c23, // sw     a1, 0x0F8(a0)
+  0x00100073, // ebreak
+};
+
 void SLDebugger::get_block(uint32_t addr, void* data, int size_dwords) {
-  static uint32_t prog_get_block[8] = {
-    0xe0000537, // lui    a0, 0xE0000
-    0x0f852583, // lw     a1, 0x0F8(a0) // data0 = *data1;
-    0x0005a583, // lw     a1, 0x000(a1)
-    0x0eb52a23, // sw     a1, 0x0F4(a0)
-    0x0f852583, // lw     a1, 0x0F8(a0) // data1 += 4
-    0x00458593, // addi   a1, a1, 4
-    0x0eb52c23, // sw     a1, 0x0F8(a0)
-    0x00100073, // ebreak
-  };
-
+  stream_get_start(addr);
   uint32_t* cursor = (uint32_t*)data;
+  for (int i = 0; i < size_dwords; i++) {
+    *cursor++ = stream_get_u32();
+  }
+  stream_get_end();
+}
 
+void SLDebugger::stream_get_start(uint32_t addr) {
   load_prog(prog_get_block);
   put_dbg(ADDR_DATA1,   addr);
   put_dbg(ADDR_AUTOCMD, 0x00000001);
   put_dbg(ADDR_COMMAND, cmd_runprog);
-  for (int i = 0; i < size_dwords; i++) {
-    *cursor++ = get_dbg(ADDR_DATA0);
-  }
+}
 
+uint32_t SLDebugger::stream_get_u32() {
+  return get_dbg(ADDR_DATA0);
+}
+
+void SLDebugger::stream_get_end() {
   put_dbg(ADDR_AUTOCMD, 0x00000000);
 }
 
+
 //-----------------------------------------------------------------------------
 
+static uint32_t prog_put_block[8] = {
+  0xe0000537, // lui    a0, 0xE0000
+  0x0f852583, // lw     a1, 0x0F8(a0)
+  0x0f452503, // lw     a0, 0x0F4(a0)
+  0x00a5a023, // sw     a0, a1
+  0x00458593, // addi   a1, a1, 4
+  0xe0000537, // lui    a0, 0xE0000
+  0x0eb52c23, // sw     a1, 0xF8(a0)
+  0x00100073, // ebreak
+};
+
 void SLDebugger::put_block(uint32_t addr, void* data, int size_dwords) {
-  static uint32_t prog_put_block[8] = {
-    0xe0000537, // lui    a0, 0xE0000
-    0x0f852583, // lw     a1, 0x0F8(a0)
-    0x0f452503, // lw     a0, 0x0F4(a0)
-    0x00a5a023, // sw     a0, a1
-    0x00458593, // addi   a1, a1, 4
-    0xe0000537, // lui    a0, 0xE0000
-    0x0eb52c23, // sw     a1, 0xF8(a0)
-    0x00100073, // ebreak
-  };
 
   uint32_t* cursor = (uint32_t*)data;
-  uint32_t a0 = get_gpr(10);
-  uint32_t a1 = get_gpr(11);
 
   load_prog(prog_put_block);
   put_dbg(ADDR_DATA0, *cursor++);
@@ -311,8 +321,25 @@ void SLDebugger::put_block(uint32_t addr, void* data, int size_dwords) {
   }
 
   put_dbg(ADDR_AUTOCMD, 0x00000000);
-  put_gpr(10, a0);
-  put_gpr(11, a1);
+}
+
+void SLDebugger::stream_put_start(uint32_t addr) {
+  load_prog(prog_put_block);
+  put_dbg(ADDR_DATA1, addr);
+  first_put = true;
+}
+
+void SLDebugger::stream_put_u32(uint32_t data) {
+  put_dbg(ADDR_DATA0, data);
+  if (first_put) {
+    put_dbg(ADDR_AUTOCMD, 0x00000001);
+    put_dbg(ADDR_COMMAND, cmd_runprog);
+    first_put = false;
+  }
+}
+
+void SLDebugger::stream_put_end() {
+  put_dbg(ADDR_AUTOCMD, 0x00000000);
 }
 
 //------------------------------------------------------------------------------

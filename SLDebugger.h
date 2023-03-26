@@ -32,6 +32,16 @@ struct SLDebugger {
   void get_block(uint32_t addr, void* data, int size_dwords);
   void put_block(uint32_t addr, void* data, int size_dwords);
 
+  void     stream_get_start(uint32_t addr);
+  uint32_t stream_get_u32();
+  void     stream_get_end();
+
+  void     stream_put_start(uint32_t addr);
+  void     stream_put_u32(uint32_t data);
+  void     stream_put_end();
+  bool first_put = true;
+
+
   // Flash erase
   void wipe_64  (uint32_t addr);
   void wipe_1024(uint32_t addr);

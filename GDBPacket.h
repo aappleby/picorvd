@@ -48,57 +48,36 @@ struct GDBPacket {
     return true;
   }
 
-  bool skip_char(char c) {
-    if (buf[cursor] == c) {
-      cursor++;
-      return true;
+  //----------------------------------------
+
+  char peek_char() {
+    if (cursor >= size) {
+      return 0;
     }
     else {
-      error = true;
-      return false;
+      return buf[cursor];
     }
   }
 
-  bool skip_prefix(const char* p) {
-    while(*p) {
-      if (buf[cursor] == *p) {
-        cursor++;
-        p++;
-      }
-      else {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  char get_char() {
+  char take_char() {
     if (cursor >= size) {
       error = true;
       return 0;
     }
-    return buf[cursor++];
+    else {
+      return buf[cursor++];
+    }
   }
 
-  int get_hex() {
-    if (cursor >= size) {
-      error = true;
-      return 0;
-    }
-
-    int sign = 1;
-    if (buf[cursor] == '-') {
-      sign = -1;
-      cursor++;
-    }
+  int take_hex() {
+    int sign = match('-') ? -1 : 1;
 
     int accum = 0;
     bool any_digits = false;
 
-    while(1) {
-      char c = buf[cursor];
-      int digit = 0;
-      if (!from_hex(c, digit)) break;
+    int digit = 0;
+    for (int i = 0; i < 8; i++) {
+      if (!from_hex(peek_char(), digit)) break;
       accum = (accum << 4) | digit;
       any_digits = true;
       cursor++;
@@ -106,6 +85,39 @@ struct GDBPacket {
 
     if (!any_digits) error = true;
     return sign * accum;
+  }
+
+  void take(char c) {
+    char d = take_char();
+    if (c != d) {
+      error = true;
+    }
+  }
+
+  void take(const char* s) {
+    while(*s) take(*s++);
+  }
+
+  //----------------------------------------
+
+  bool match(char c) {
+    int old_cursor = cursor;
+    if (take_char() != c) {
+      cursor = old_cursor;
+      return false;
+    }
+    return true;
+  }
+
+  bool match(const char* p) {
+    int old_cursor = cursor;
+    while(*p) {
+      if (!match(*p++)) {
+        cursor = old_cursor;
+        return false;
+      }
+    }
+    return true;
   }
 
   //----------------------------------------
@@ -150,7 +162,7 @@ struct GDBPacket {
   //----------------------------------------
 
   int    sentinel1 = 0xDEADBEEF;
-  char   buf[1024];
+  char   buf[32768/4];
   int    sentinel2 = 0xF00DCAFE;
   int    size = 0;
   char   checksum = 0;

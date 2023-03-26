@@ -33,7 +33,9 @@ char ser_get() {
 }
 
 void usb_put(char c) {
-  if (c == '\n') usb_put('\r');
+  // We can't insert \r on put because it breaks packet checksumming
+  // if (c == '\n') usb_put('\r');
+
   stdio_usb_out_chars(&c, 1);
 }
 

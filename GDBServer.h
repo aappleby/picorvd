@@ -43,46 +43,24 @@ private:
   void handle_M();
   void handle_p();
   void handle_P();
-  void handle_qAttached();
-  void handle_qC();
-  void handle_qfThreadInfo();
-  void handle_qL();
-  void handle_qOffsets();
-  void handle_qsThreadInfo();
-  void handle_qSupported();
-  void handle_qSymbol();
-  void handle_qTfP();
-  void handle_qTfV();
-  void handle_qTStatus();
+  void handle_q();
+  void handle_Q();
+  void handle_R();
   void handle_s();
-  void handle_vCont();
-  void handle_vKill();
-  void handle_vMustReplyEmpty();
+  void handle_v();
 
 private:
 
-  enum {
-    WAIT_FOR_START,
-    RECV_COMMAND,
-    RECV_ARGS,
-    RECV_CHECKSUM1,
-    RECV_CHECKSUM2,
-    SEND_ACK,
-    SEND_PACKET,
-    WAIT_ACK,
-  };
+  bool send_packet();
 
   SLDebugger* sl;
-  Log    log;
+  GDBPacket   send;
+  GDBPacket   recv;
+  Log         log;
+
   getter cb_get = nullptr;
   putter cb_put = nullptr;
   bool   sending = true;
-
-  int    state = WAIT_FOR_START;
-  int    serial_fd = 0;
-
-  GDBPacket send;
-  GDBPacket recv;
 };
 
 //------------------------------------------------------------------------------
