@@ -5,7 +5,7 @@ struct GDBPacket {
   void clear() {
     for (int i = 0; i < 1024; i++) buf[i] = 0;
     size = 0;
-    checksum = 0;
+    //checksum = 0;
     error = false;
     cursor = 0;
     packet_valid = false;
@@ -51,12 +51,7 @@ struct GDBPacket {
   //----------------------------------------
 
   char peek_char() {
-    if (cursor >= size) {
-      return 0;
-    }
-    else {
-      return buf[cursor];
-    }
+    return cursor >= size ? 0 : buf[cursor];
   }
 
   char take_char() {
@@ -69,7 +64,7 @@ struct GDBPacket {
     }
   }
 
-  int take_hex() {
+  int take_i32() {
     int sign = match('-') ? -1 : 1;
 
     int accum = 0;
@@ -85,6 +80,22 @@ struct GDBPacket {
 
     if (!any_digits) error = true;
     return sign * accum;
+  }
+
+  unsigned int take_u32() {
+    unsigned int accum = 0;
+    bool any_digits = false;
+
+    int digit = 0;
+    for (int i = 0; i < 8; i++) {
+      if (!from_hex(peek_char(), digit)) break;
+      accum = (accum << 4) | digit;
+      any_digits = true;
+      cursor++;
+    }
+
+    if (!any_digits) error = true;
+    return accum;
   }
 
   void take(char c) {
@@ -130,12 +141,12 @@ struct GDBPacket {
 
   void start_packet() {
     clear();
-    checksum = 0;
+    //checksum = 0;
   }
 
   void put_buf(char c) {
     buf[cursor++] = c;
-    checksum += c;
+    //checksum += c;
     size++;
   }
 
@@ -165,7 +176,7 @@ struct GDBPacket {
   char   buf[32768/4];
   int    sentinel2 = 0xF00DCAFE;
   int    size = 0;
-  char   checksum = 0;
+  //char   checksum = 0;
   bool   error = false;
   int    cursor = 0;
   bool   packet_valid = false;

@@ -43,7 +43,7 @@ char usb_get() {
   char r = 0;
   while (1) {
     int len = stdio_usb_in_chars(&r, 1);
-    if (len) return r;
+    if (len && len != PICO_ERROR_NO_DATA) return r;
   }
   // should never get here...
   return 0;

@@ -1,6 +1,7 @@
 #include "GDBServer.h"
 #include "utils.h"
 #include "WCH_Regs.h"
+#include <ctype.h>
 
 const char* memory_map = R"(<?xml version="1.0"?>
 <!DOCTYPE memory-map PUBLIC "+//IDN gnu.org//DTD GDB Memory Map V1.0//EN" "http://sourceware.org/gdb/gdb-memory-map.dtd">
@@ -54,6 +55,7 @@ const int GDBServer::handler_count = sizeof(GDBServer::handler_tab) / sizeof(GDB
 //------------------------------------------------------------------------------
 
 void GDBServer::put_byte(char b) {
+  //send_checksum += b;
   cb_put(b);
 
   if (!sending) {
@@ -61,25 +63,28 @@ void GDBServer::put_byte(char b) {
     sending = true;
   }
 
-  if (b) {
+  if (isprint(b)) {
     log("%c", b);
-  } else {
-    log("\0");
+  }
+  else {
+    log("_");
   }
 }
 
 char GDBServer::get_byte() {
   auto b = cb_get();
+  //recv_checksum += b;
 
   if (sending) {
     log("\n>> ");
     sending = false;
   }
 
-  if (b) {
+  if (isprint(b)) {
     log("%c", b);
-  } else {
-    log("\0");
+  }
+  else {
+    log("_");
   }
 
   return b;
@@ -90,6 +95,7 @@ char GDBServer::get_byte() {
 
 void GDBServer::handle_questionmark() {
   //  SIGINT = 2
+  recv.take('?');
   send.set_packet("T02");
 }
 
@@ -97,6 +103,7 @@ void GDBServer::handle_questionmark() {
 // Enable extended mode
 
 void GDBServer::handle_bang() {
+  recv.take('!');
   send.set_packet("OK");
 }
 
@@ -111,12 +118,14 @@ void GDBServer::handle_ctrlc() {
 // Continue - "c<addr>"
 
 void GDBServer::handle_c() {
+  recv.take('c');
   send.set_packet("");
 }
 
 //------------------------------------------------------------------------------
 
 void GDBServer::handle_D() {
+  recv.take('D');
   send.set_packet("OK");
 }
 
@@ -124,18 +133,23 @@ void GDBServer::handle_D() {
 // Read general registers
 
 void GDBServer::handle_g() {
-  send.start_packet();
-  for (int i = 0; i < 16; i++) {
-    send.put_u32(sl->get_gpr(i));
+  recv.take('g');
+
+  if (!recv.error) {
+    send.start_packet();
+    for (int i = 0; i < 16; i++) {
+      send.put_u32(sl->get_gpr(i));
+    }
+    send.put_u32(sl->get_csr(CSR_DPC));
+    send.end_packet();
   }
-  send.put_u32(sl->get_csr(CSR_DPC));
-  send.end_packet();
 }
 
 //----------
 // Write general registers
 
 void GDBServer::handle_G() {
+  recv.take('G');
   /*
   packet_start();
   for (int i = 0; i < 32; i++) {
@@ -154,7 +168,7 @@ void GDBServer::handle_G() {
 void GDBServer::handle_H() {
   recv.take('H');
   recv.skip(1);
-  int thread_id = recv.take_hex();
+  int thread_id = recv.take_i32();
 
   if (recv.error) {
     send.set_packet("E01");
@@ -168,6 +182,7 @@ void GDBServer::handle_H() {
 // Kill
 
 void GDBServer::handle_k() {
+  recv.take('k');
   // 'k' always kills the target and explicitly does _not_ have a reply.
 }
 
@@ -176,9 +191,9 @@ void GDBServer::handle_k() {
 
 void GDBServer::handle_m() {
   recv.take('m');
-  int addr = recv.take_hex();
+  int addr = recv.take_i32();
   recv.take(',');
-  int size = recv.take_hex();
+  int size = recv.take_i32();
 
   if (recv.error) {
     log("\nhandle_m %x %x - recv.error '%s'\n", addr, size, recv.buf);
@@ -210,9 +225,9 @@ void GDBServer::handle_m() {
 
 void GDBServer::handle_M() {
   recv.take('M');
-  int addr = recv.take_hex();
+  int addr = recv.take_i32();
   recv.take(',');
-  int len = recv.take_hex();
+  int len = recv.take_i32();
   recv.take(':');
 
   // FIXME handle non-aligned, non-dword writes?
@@ -222,7 +237,7 @@ void GDBServer::handle_M() {
   }
 
   for (int i = 0; i < len/4; i++) {
-    sl->put_mem(addr, recv.take_hex());
+    sl->put_mem(addr, recv.take_i32());
     addr += 4;
   }
 
@@ -239,7 +254,7 @@ void GDBServer::handle_M() {
 
 void GDBServer::handle_p() {
   recv.take('p');
-  int gpr = recv.take_hex();
+  int gpr = recv.take_i32();
 
   if (!recv.error) {
     send.start_packet();
@@ -252,14 +267,22 @@ void GDBServer::handle_p() {
 // Write the value of register N
 
 void GDBServer::handle_P() {
-  send.set_packet("");
+  recv.take('P');
+  int gpr = recv.take_i32();
+  recv.take('=');
+  unsigned int val = recv.take_u32();
+
+  if (!recv.error) {
+    sl->put_gpr(gpr, val);
+    send.set_packet("OK");
+  }
 }
 
 //------------------------------------------------------------------------------
 
 void GDBServer::handle_q() {
   if (recv.match("qAttached")) {
-  // Query what GDB is attached to
+    // Query what GDB is attached to
     // Reply:
     // ‘1’ The remote server attached to an existing process.
     // ‘0’ The remote server created a new process.
@@ -272,23 +295,6 @@ void GDBServer::handle_q() {
     // Reply: ‘QC<thread-id>’
     send.set_packet("QC0");
   }
-  else if (recv.match("qL")) {
-    // Query thread information from RTOS
-    // FIXME get arg
-    // qL1200000000000000000
-    // qL 1 20 00000000 00000000
-    // not sure if this is correct.
-    send.set_packet("qM 01 1 00000000 00000001");
-  }
-  else if (recv.match("qOffsets")) {
-    // Get section offsets that the target used when relocating the downloaded
-    // image. We don't have any offsets.
-    send.set_packet("");
-  }
-  else if (recv.match("qTStatus")) {
-    // Query trace status
-    send.set_packet("T0");
-  }
   else if (recv.match("qfThreadInfo")) {
     // Query all active thread IDs
     send.set_packet("m0");
@@ -298,13 +304,15 @@ void GDBServer::handle_q() {
     send.set_packet("l");
   }
   else if (recv.match("qSupported")) {
+    // FIXME we're ignoring the contents of qSupported
+    recv.cursor = recv.size;
     send.set_packet("PacketSize=32768;qXfer:memory-map:read+");
   }
   else if (recv.match("qXfer:")) {
     if (recv.match("memory-map:read::")) {
-      int offset = recv.take_hex();
+      int offset = recv.take_i32();
       recv.take(',');
-      int length = recv.take_hex();
+      int length = recv.take_i32();
 
       if (recv.error) {
         send.set_packet("E00");
@@ -320,6 +328,8 @@ void GDBServer::handle_q() {
     // FIXME handle other xfer packets
   }
   else {
+    // Unknown query, ignore it
+    recv.cursor = recv.size;
     send.set_packet("");
   }
 }
@@ -328,6 +338,7 @@ void GDBServer::handle_q() {
 // Restart
 
 void GDBServer::handle_R() {
+  recv.take('R');
   send.set_packet("");
 }
 
@@ -335,6 +346,7 @@ void GDBServer::handle_R() {
 // Step
 
 void GDBServer::handle_s() {
+  recv.take('s');
   send.set_packet("");
 }
 
@@ -345,11 +357,23 @@ void GDBServer::handle_v() {
     send.set_packet("");
   }
   else if (recv.match("vFlash")) {
-    if (recv.match("Erase")) {
+    if (recv.match("Write")) {
       recv.take(':');
-      int start = recv.take_hex();
+      int addr = recv.take_i32();
+      recv.take(":");
+      log("\n");
+      log("recv.size   %d\n", recv.size);
+      log("recv.cursor %d\n", recv.cursor);
+      int size = recv.size - recv.cursor;
+      log("Write size %d, write addr %x\n", size, addr);
+      recv.cursor = recv.size;
+      send.set_packet("OK");
+    }
+    else if (recv.match("Erase")) {
+      recv.take(':');
+      int addr = recv.take_i32();
       recv.take(',');
-      int size = recv.take_hex();
+      int size = recv.take_i32();
 
       if (recv.error) {
         send.set_packet("E00");
@@ -381,16 +405,22 @@ void GDBServer::loop() {
     while (get_byte() != '$');
 
     // Add bytes to packet until we see the end char
+    // Checksum is for the _escaped_ data.
     recv.clear();
+    uint8_t checksum = 0;
     while (1) {
       char c = get_byte();
       if (c == '#') {
         break;
       }
       else if (c == '}') {
-        recv.put_buf(get_byte() ^ 0x20);
+        checksum += c;
+        c = get_byte();
+        checksum += c;
+        recv.put_buf(c ^ 0x20);
       }
       else {
+        checksum += c;
         recv.put_buf(c);
       }
     }
@@ -398,11 +428,11 @@ void GDBServer::loop() {
     expected_checksum = (expected_checksum << 4) | from_hex(get_byte());
     expected_checksum = (expected_checksum << 4) | from_hex(get_byte());
 
-    if (recv.checksum != expected_checksum) {
+    if (checksum != expected_checksum) {
       log("\n");
       log("Packet transmission error\n");
       log("expected checksum 0x%02x\n", expected_checksum);
-      log("actual checksum   0x%02x\n", recv.checksum);
+      log("actual checksum   0x%02x\n", checksum);
       put_byte('-');
       continue;
     }
@@ -422,6 +452,14 @@ void GDBServer::loop() {
       recv.cursor = 0;
       send.clear();
       (*this.*h)();
+
+      if (recv.error) {
+        log("\nParse failure for packet!\n");
+        send.set_packet("E00");
+      }
+      else if (recv.cursor != recv.size) {
+        log("\nLeftover text in packet - \"%s\"\n", &recv.buf[recv.cursor]);
+      }
     }
     else {
       log("No handler for command %s\n", recv.buf);
@@ -454,19 +492,23 @@ void GDBServer::loop() {
 bool GDBServer::send_packet() {
 
   put_byte('$');
+  uint8_t checksum = 0;
   for (int i = 0; i < send.size; i++) {
     char c = send.buf[i];
     if (c == '#' || c == '$' || c == '}' || c == '*') {
+      checksum += '}';
       put_byte('}');
+      checksum += c ^ 0x20;
       put_byte(c ^ 0x20);
     }
     else {
+      checksum += c;
       put_byte(c);
     }
   }
   put_byte('#');
-  put_byte(to_hex((send.checksum >> 4) & 0xF));
-  put_byte(to_hex((send.checksum >> 0) & 0xF));
+  put_byte(to_hex((checksum >> 4) & 0xF));
+  put_byte(to_hex((checksum >> 0) & 0xF));
 
   while(1) {
     char c = get_byte();
