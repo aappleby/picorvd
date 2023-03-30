@@ -32,30 +32,24 @@ All other commands are optional.
 // as the start of a run-length encoded sequence (described next).
 */
 
-/*
-‘vFlashErase:addr,length’
-‘vFlashWrite:addr:XX...’
-‘vFlashDone’
-*/
-
 const GDBServer::handler GDBServer::handler_tab[] = {
-  { "?",               &GDBServer::handle_questionmark },
-  { "!",               &GDBServer::handle_bang },
-  { "\003",            &GDBServer::handle_ctrlc },
-  { "c",               &GDBServer::handle_c },
-  { "D",               &GDBServer::handle_D },
-  { "g",               &GDBServer::handle_g },
-  { "G",               &GDBServer::handle_G },
-  { "H",               &GDBServer::handle_H },
-  { "k",               &GDBServer::handle_k },
-  { "m",               &GDBServer::handle_m },
-  { "M",               &GDBServer::handle_M },
-  { "p",               &GDBServer::handle_p },
-  { "P",               &GDBServer::handle_P },
-  { "q",               &GDBServer::handle_q },
-  { "s",               &GDBServer::handle_s },
-  { "R",               &GDBServer::handle_R },
-  { "v",               &GDBServer::handle_v },
+  { "?",     &GDBServer::handle_questionmark },
+  { "!",     &GDBServer::handle_bang },
+  { "\003",  &GDBServer::handle_ctrlc },
+  { "c",     &GDBServer::handle_c },
+  { "D",     &GDBServer::handle_D },
+  { "g",     &GDBServer::handle_g },
+  { "G",     &GDBServer::handle_G },
+  { "H",     &GDBServer::handle_H },
+  { "k",     &GDBServer::handle_k },
+  { "m",     &GDBServer::handle_m },
+  { "M",     &GDBServer::handle_M },
+  { "p",     &GDBServer::handle_p },
+  { "P",     &GDBServer::handle_P },
+  { "q",     &GDBServer::handle_q },
+  { "s",     &GDBServer::handle_s },
+  { "R",     &GDBServer::handle_R },
+  { "v",     &GDBServer::handle_v },
 };
 
 const int GDBServer::handler_count = sizeof(GDBServer::handler_tab) / sizeof(GDBServer::handler_tab[0]);
@@ -64,14 +58,8 @@ const int GDBServer::handler_count = sizeof(GDBServer::handler_tab) / sizeof(GDB
 
 void GDBServer::put_byte(char b) {
   //send_checksum += b;
+  log("%c", isprint(b) ? b : '_');
   cb_put(b);
-
-  if (isprint(b)) {
-    log("%c", b);
-  }
-  else {
-    log("_");
-  }
 }
 
 //------------------------------------------------------------------------------
@@ -492,19 +480,6 @@ void GDBServer::flush_flash_cache() {
 //------------------------------------------------------------------------------
 
 void GDBServer::handle_packet() {
-  if (checksum != expected_checksum) {
-    log("\n");
-    log("Packet transmission error\n");
-    log("expected checksum 0x%02x\n", expected_checksum);
-    log("actual checksum   0x%02x\n", checksum);
-    put_byte('-');
-    return;
-  }
-
-  // Packet checksum OK, handle it.
-  put_byte('+');
-
-
   handler_func h = nullptr;
   for (int i = 0; i < handler_count; i++) {
     if (cmp(handler_tab[i].name, recv.buf) == 0) {
@@ -578,34 +553,50 @@ void GDBServer::update(bool connected, char c) {
 
     case RECV_SUFFIX2:
       expected_checksum = (expected_checksum << 4) | from_hex(c);
-      handle_packet();
-      sending = true;
-      state = SEND_PREFIX;
+
+      if (checksum != expected_checksum) {
+        log("\n");
+        log("Packet transmission error\n");
+        log("expected checksum 0x%02x\n", expected_checksum);
+        log("actual checksum   0x%02x\n", checksum);
+        put_byte('-');
+        state = RECV_PREFIX;
+      }
+      else {
+        // Packet checksum OK, handle it.
+        put_byte('+');
+        handle_packet();
+        sending = true;
+        state = SEND_PREFIX;
+      }
       break;
 
     case SEND_PREFIX:
+      log("\n<< ");
       put_byte('$');
-      state = SEND_PACKET;
+      checksum = 0;
+      state = send.size ? SEND_PACKET : SEND_SUFFIX1;
+      send.cursor = 0;
       break;
 
-    case SEND_PACKET:
-      checksum = 0;
-      log("\n<< ");
-      for (int i = 0; i < send.size; i++) {
-        char c = send.buf[i];
-        if (c == '#' || c == '$' || c == '}' || c == '*') {
-          checksum += '}';
-          put_byte('}');
-          checksum += c ^ 0x20;
-          put_byte(c ^ 0x20);
-        }
-        else {
-          checksum += c;
-          put_byte(c);
-        }
+    case SEND_PACKET: {
+      char c = send.buf[send.cursor];
+      if (c == '#' || c == '$' || c == '}' || c == '*') {
+        checksum += '}';
+        put_byte('}');
+        checksum += c ^ 0x20;
+        put_byte(c ^ 0x20);
       }
-      state = SEND_SUFFIX1;
+      else {
+        checksum += c;
+        put_byte(c);
+      }
+      send.cursor++;
+      if (send.cursor == send.size) {
+        state = SEND_SUFFIX1;
+      }
       break;
+    }
 
     case SEND_PACKET_ESCAPE:
       break;
