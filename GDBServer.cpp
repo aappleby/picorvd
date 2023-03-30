@@ -22,6 +22,14 @@ can implement run control with the ‘c’ (continue) command, and if the target
 architecture supports hardware-assisted single-stepping, the ‘s’ (step) command.
 Stubs that support multi-threading targets should support the ‘vCont’ command.
 All other commands are optional.
+
+// The binary data representation uses 7d (ASCII ‘}’) as an escape character.
+// Any escaped byte is transmitted as the escape character followed by the
+// original character XORed with 0x20. For example, the byte 0x7d would be
+// transmitted as the two bytes 0x7d 0x5d. The bytes 0x23 (ASCII ‘#’), 0x24
+// (ASCII ‘$’), and 0x7d (ASCII ‘}’) must always be escaped. Responses sent by
+// the stub must also escape 0x2a (ASCII ‘*’), so that it is not interpreted
+// as the start of a run-length encoded sequence (described next).
 */
 
 /*
@@ -583,8 +591,23 @@ void GDBServer::update(bool connected, char c) {
     case SEND_PACKET:
       checksum = 0;
       log("\n<< ");
-      send_packet();
+      for (int i = 0; i < send.size; i++) {
+        char c = send.buf[i];
+        if (c == '#' || c == '$' || c == '}' || c == '*') {
+          checksum += '}';
+          put_byte('}');
+          checksum += c ^ 0x20;
+          put_byte(c ^ 0x20);
+        }
+        else {
+          checksum += c;
+          put_byte(c);
+        }
+      }
       state = SEND_SUFFIX1;
+      break;
+
+    case SEND_PACKET_ESCAPE:
       break;
 
     case SEND_SUFFIX1:
@@ -623,34 +646,6 @@ void GDBServer::update(bool connected, char c) {
       }
       break;
   }
-}
-
-//------------------------------------------------------------------------------
-// The binary data representation uses 7d (ASCII ‘}’) as an escape character.
-// Any escaped byte is transmitted as the escape character followed by the
-// original character XORed with 0x20. For example, the byte 0x7d would be
-// transmitted as the two bytes 0x7d 0x5d. The bytes 0x23 (ASCII ‘#’), 0x24
-//(ASCII ‘$’), and 0x7d (ASCII ‘}’) must always be escaped. Responses sent by
-// the stub must also escape 0x2a (ASCII ‘*’), so that it is not interpreted
-// as the start of a run-length encoded sequence (described next).
-
-bool GDBServer::send_packet() {
-
-  for (int i = 0; i < send.size; i++) {
-    char c = send.buf[i];
-    if (c == '#' || c == '$' || c == '}' || c == '*') {
-      checksum += '}';
-      put_byte('}');
-      checksum += c ^ 0x20;
-      put_byte(c ^ 0x20);
-    }
-    else {
-      checksum += c;
-      put_byte(c);
-    }
-  }
-
-  return true;
 }
 
 //------------------------------------------------------------------------------

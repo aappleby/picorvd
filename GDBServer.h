@@ -52,8 +52,6 @@ public:
 
   void handle_packet();
 
-  bool send_packet();
-
   void flash_erase(int addr, int size);
   void put_flash_cache(int addr, uint8_t data);
   void flush_flash_cache();
@@ -83,6 +81,7 @@ public:
 
     SEND_PREFIX,
     SEND_PACKET,
+    SEND_PACKET_ESCAPE,
     SEND_SUFFIX1,
     SEND_SUFFIX2,
     SEND_SUFFIX3,
