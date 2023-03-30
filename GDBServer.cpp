@@ -572,6 +572,10 @@ void GDBServer::update(bool connected, char c) {
       expected_checksum = (expected_checksum << 4) | from_hex(c);
       handle_packet();
       sending = true;
+      state = SEND_PREFIX;
+      break;
+
+    case SEND_PREFIX:
       state = SEND_PACKET;
       break;
 
@@ -579,9 +583,22 @@ void GDBServer::update(bool connected, char c) {
       checksum = 0;
       log("\n<< ");
       send_packet();
+      state = SEND_SUFFIX1;
+      break;
+
+    case SEND_SUFFIX1:
+      state = SEND_SUFFIX2;
+      break;
+
+    case SEND_SUFFIX2:
+      state = SEND_SUFFIX3;
+      break;
+
+    case SEND_SUFFIX3:
       sending = false;
       state = RECV_ACK;
       break;
+
 
     case RECV_ACK:
       if (c == '+') {
