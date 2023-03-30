@@ -576,6 +576,7 @@ void GDBServer::update(bool connected, char c) {
       break;
 
     case SEND_PREFIX:
+      put_byte('$');
       state = SEND_PACKET;
       break;
 
@@ -587,14 +588,17 @@ void GDBServer::update(bool connected, char c) {
       break;
 
     case SEND_SUFFIX1:
+      put_byte('#');
       state = SEND_SUFFIX2;
       break;
 
     case SEND_SUFFIX2:
+      put_byte(to_hex((checksum >> 4) & 0xF));
       state = SEND_SUFFIX3;
       break;
 
     case SEND_SUFFIX3:
+      put_byte(to_hex((checksum >> 0) & 0xF));
       sending = false;
       state = RECV_ACK;
       break;
@@ -632,7 +636,6 @@ void GDBServer::update(bool connected, char c) {
 
 bool GDBServer::send_packet() {
 
-  put_byte('$');
   for (int i = 0; i < send.size; i++) {
     char c = send.buf[i];
     if (c == '#' || c == '$' || c == '}' || c == '*') {
@@ -646,9 +649,6 @@ bool GDBServer::send_packet() {
       put_byte(c);
     }
   }
-  put_byte('#');
-  put_byte(to_hex((checksum >> 4) & 0xF));
-  put_byte(to_hex((checksum >> 0) & 0xF));
 
   return true;
 }
