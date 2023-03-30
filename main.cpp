@@ -159,14 +159,21 @@ int main() {
   //server.loop();
   server.sl->halt();
   server.sl->unlock_flash();
-  server.state = GDBServer::S_PREFIX;
+  server.state = GDBServer::RECV_PREFIX;
 
   while(1) {
     if (server.sending) {
       server.update(true, 0);
     }
     else {
-      server.update(true, usb_get());
+      auto b = usb_get();
+      if (isprint(b)) {
+        dblog("%c", b);
+      }
+      else {
+        dblog("_");
+      }
+      server.update(true, b);
     }
   }
 

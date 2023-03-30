@@ -66,20 +66,6 @@ void GDBServer::put_byte(char b) {
   }
 }
 
-char GDBServer::get_byte() {
-  auto b = cb_get();
-  //recv_checksum += b;
-
-  if (isprint(b)) {
-    log("%c", b);
-  }
-  else {
-    log("_");
-  }
-
-  return b;
-}
-
 //------------------------------------------------------------------------------
 // Report why the CPU halted
 
@@ -546,28 +532,25 @@ void GDBServer::handle_packet() {
 
 void GDBServer::update(bool connected, char c) {
   switch(state) {
-    case S_DISCONNECTED:
-      break;
-
-    case S_PREFIX:
+    case RECV_PREFIX:
       // Wait for start char
       if (c == '$') {
-        state = S_PACKET;
+        state = RECV_PACKET;
         recv.clear();
         checksum = 0;
       }
       break;
 
-    case S_PACKET:
+    case RECV_PACKET:
       // Add bytes to packet until we see the end char
       // Checksum is for the _escaped_ data.
       if (c == '#') {
         expected_checksum = 0;
-        state = S_SUFFIX1;
+        state = RECV_SUFFIX1;
       }
       else if (c == '}') {
         checksum += c;
-        state = S_PACKET_ESCAPE;
+        state = RECV_PACKET_ESCAPE;
       }
       else {
         checksum += c;
@@ -575,32 +558,48 @@ void GDBServer::update(bool connected, char c) {
       }
       break;
 
-    case S_PACKET_ESCAPE:
+    case RECV_PACKET_ESCAPE:
       checksum += c;
       recv.put_buf(c ^ 0x20);
       break;
 
-    case S_SUFFIX1:
+    case RECV_SUFFIX1:
       expected_checksum = (expected_checksum << 4) | from_hex(c);
-      state = S_SUFFIX2;
+      state = RECV_SUFFIX2;
       break;
 
-    case S_SUFFIX2:
+    case RECV_SUFFIX2:
       expected_checksum = (expected_checksum << 4) | from_hex(c);
       handle_packet();
       sending = true;
-      state = S_REPLY;
+      state = SEND_PACKET;
       break;
 
-    case S_REPLY:
-      for (int retry = 0; retry < 5; retry++) {
-        if (send_packet()) break;
-        if (retry == 4) {
-          log("\nFailed to send packet after 5 retries\n");
-        }
-      }
+    case SEND_PACKET:
+      checksum = 0;
+      log("\n<< ");
+      send_packet();
       sending = false;
-      state = S_PREFIX;
+      state = RECV_ACK;
+      break;
+
+    case RECV_ACK:
+      if (c == '+') {
+        log("\n>> ");
+        state = RECV_PREFIX;
+      }
+      else if (c == '-') {
+        log("========================\n");
+        log("========  NACK  ========\n");
+        log("========================\n");
+        sending = true;
+        state = SEND_PACKET;
+      }
+      else {
+        // FIXME - are we still seeing this? YES - nulls
+        //log("garbage ack char %d '%c'\n", c, c);
+        //return false;
+      }
       break;
   }
 }
@@ -617,7 +616,6 @@ void GDBServer::update(bool connected, char c) {
 bool GDBServer::send_packet() {
 
   put_byte('$');
-  uint8_t checksum = 0;
   for (int i = 0; i < send.size; i++) {
     char c = send.buf[i];
     if (c == '#' || c == '$' || c == '}' || c == '*') {
@@ -635,23 +633,7 @@ bool GDBServer::send_packet() {
   put_byte(to_hex((checksum >> 4) & 0xF));
   put_byte(to_hex((checksum >> 0) & 0xF));
 
-  while(1) {
-    char c = get_byte();
-    if (c == '+') {
-      return true;
-    }
-    else if (c == '-') {
-      log("========================\n");
-      log("========  NACK  ========\n");
-      log("========================\n");
-      return false;
-    }
-    else {
-      // FIXME - are we still seeing this? YES - nulls
-      //log("garbage ack char %d '%c'\n", c, c);
-      //return false;
-    }
-  }
+  return true;
 }
 
 //------------------------------------------------------------------------------

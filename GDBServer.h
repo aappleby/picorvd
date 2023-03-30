@@ -27,7 +27,6 @@ public:
   static const int handler_count;
 
   void put_byte(char b);
-  char get_byte();
 
   void handle_questionmark();
   void handle_bang();
@@ -76,16 +75,22 @@ public:
   uint64_t page_bitmap = 0;
 
   enum {
-    S_DISCONNECTED,
-    S_PREFIX,
-    S_PACKET,
-    S_PACKET_ESCAPE,
-    S_SUFFIX1,
-    S_SUFFIX2,
-    S_REPLY,
+    RECV_PREFIX,
+    RECV_PACKET,
+    RECV_PACKET_ESCAPE,
+    RECV_SUFFIX1,
+    RECV_SUFFIX2,
+
+    SEND_PREFIX,
+    SEND_PACKET,
+    SEND_SUFFIX1,
+    SEND_SUFFIX2,
+    SEND_SUFFIX3,
+
+    RECV_ACK,
   };
 
-  int state = S_DISCONNECTED;
+  int state = RECV_PREFIX;
   char expected_checksum = 0;
   uint8_t checksum = 0;
 };
