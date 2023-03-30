@@ -12,9 +12,9 @@ public:
   GDBServer(SLDebugger* sl, getter cb_get, putter cb_put, Log log)
   : sl(sl), cb_get(cb_get), cb_put(cb_put), log(log) {}
 
-  void loop();
+  void update(bool connected, char c);
 
-private:
+//private:
 
   using handler_func = void (GDBServer::*)(void);
 
@@ -49,9 +49,15 @@ private:
   void handle_s();
   void handle_v();
 
-private:
+//private:
+
+  void handle_packet();
 
   bool send_packet();
+
+  void flash_erase(int addr, int size);
+  void put_flash_cache(int addr, uint8_t data);
+  void flush_flash_cache();
 
   SLDebugger* sl;
   GDBPacket   send;
@@ -60,7 +66,28 @@ private:
 
   getter cb_get = nullptr;
   putter cb_put = nullptr;
-  bool   sending = true;
+  bool   sending = false;
+
+  int flash_cursor;
+  uint64_t flash_write_bitmap;
+
+  uint8_t  page_cache[64];
+  int      page_base = -1;
+  uint64_t page_bitmap = 0;
+
+  enum {
+    S_DISCONNECTED,
+    S_PREFIX,
+    S_PACKET,
+    S_PACKET_ESCAPE,
+    S_SUFFIX1,
+    S_SUFFIX2,
+    S_REPLY,
+  };
+
+  int state = S_DISCONNECTED;
+  char expected_checksum = 0;
+  uint8_t checksum = 0;
 };
 
 //------------------------------------------------------------------------------
