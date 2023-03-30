@@ -9,10 +9,9 @@
 struct GDBServer {
 public:
 
-  GDBServer(SLDebugger* sl, getter cb_get, putter cb_put, Log log)
-  : sl(sl), cb_get(cb_get), cb_put(cb_put), log(log) {}
+  GDBServer(SLDebugger* sl, Log log);
 
-  void update(bool connected, char c);
+  void update(bool connected, char byte_in, bool byte_ie, char& byte_out, bool& byte_oe);
 
 //private:
 
@@ -25,8 +24,6 @@ public:
 
   static const handler handler_tab[];
   static const int handler_count;
-
-  void put_byte(char b);
 
   void handle_questionmark();
   void handle_bang();
@@ -61,8 +58,6 @@ public:
   GDBPacket   recv;
   Log         log;
 
-  getter cb_get = nullptr;
-  putter cb_put = nullptr;
   bool   sending = false;
 
   int flash_cursor;

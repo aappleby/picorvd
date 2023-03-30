@@ -1,11 +1,13 @@
 #pragma once
 #include <stdint.h>
 #include "utils.h"
+#include "log.h"
+
 
 //------------------------------------------------------------------------------
 
 struct SLDebugger {
-  void init(int swd_pin, putter cb_put);
+  void init(int swd_pin, Log log);
   void reset();
   void halt();
   void unhalt();
@@ -79,7 +81,7 @@ private:
   int reg_count = 16;
   uint32_t regfile[32];
 
-  putter cb_put = nullptr;
+  Log log;
 };
 
 //------------------------------------------------------------------------------

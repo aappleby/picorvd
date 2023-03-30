@@ -13,8 +13,8 @@ volatile void busy_wait(int count) {
 
 //-----------------------------------------------------------------------------
 
-void SLDebugger::init(int swd_pin, putter cb_put) {
-  this->cb_put = cb_put;
+void SLDebugger::init(int swd_pin, Log log) {
+  this->log = log;
   this->swd_pin = swd_pin;
 
   gpio_set_drive_strength(swd_pin, GPIO_DRIVE_STRENGTH_2MA);
@@ -119,7 +119,7 @@ void SLDebugger::unhalt() {
 //------------------------------------------------------------------------------
 
 void SLDebugger::lock_flash() {
-  assert(halted);
+  //assert(halted);
   if (locked) return;
   locked = true;
 
@@ -130,7 +130,7 @@ void SLDebugger::lock_flash() {
 }
 
 void SLDebugger::unlock_flash() {
-  assert(halted);
+  //assert(halted);
   if (!locked) return;
   locked = false;
 
@@ -143,34 +143,34 @@ void SLDebugger::unlock_flash() {
 //------------------------------------------------------------------------------
 
 void SLDebugger::reset_cpu() {
-  print_to(cb_put, "SLDebugger::reset_cpu()\n");
+  log("SLDebugger::reset_cpu()\n");
 
   // Set halt request and wait for halt
   halt();
 
   // Set reset request and wait for reset
-  print_to(cb_put, "SLDebugger::reset_cpu 2\n");
+  log("SLDebugger::reset_cpu 2\n");
   set_dbg(ADDR_DMCONTROL, 0x80000003);
   while(!Reg_DMSTATUS(get_dbg(ADDR_DMSTATUS)).ALLHAVERESET);
 
   // Clear reset request and hold halt
-  print_to(cb_put, "SLDebugger::reset_cpu 3\n");
+  log("SLDebugger::reset_cpu 3\n");
   set_dbg(ADDR_DMCONTROL, 0x80000001);
 
   // Clear ALLHAVERESET and hold halt request
-  print_to(cb_put, "SLDebugger::reset_cpu 4\n");
+  log("SLDebugger::reset_cpu 4\n");
   set_dbg(ADDR_DMCONTROL, 0x90000001);
   while(Reg_DMSTATUS(get_dbg(ADDR_DMSTATUS)).ALLHAVERESET);
 
   // Clear halt request
-  print_to(cb_put, "SLDebugger::reset_cpu 5\n");
+  log("SLDebugger::reset_cpu 5\n");
   set_dbg(ADDR_DMCONTROL, 0x00000001);
 }
 
 //------------------------------------------------------------------------------
 
 void SLDebugger::step() {
-  assert(halted);
+  //assert(halted);
 
   Csr_DCSR dcsr = get_csr(CSR_DCSR);
   dcsr.STEP = 1;
@@ -208,7 +208,7 @@ void SLDebugger::set_dbg(uint8_t addr, uint32_t data) {
 //-----------------------------------------------------------------------------
 
 uint32_t SLDebugger::get_gpr(int index) {
-  assert(halted);
+  //assert(halted);
 
   Reg_COMMAND cmd;
   cmd.REGNO      = 0x1000 | index;
@@ -226,7 +226,7 @@ uint32_t SLDebugger::get_gpr(int index) {
 //-----------------------------------------------------------------------------
 
 void SLDebugger::set_gpr(int index, uint32_t gpr) {
-  assert(halted);
+  //assert(halted);
 
   Reg_COMMAND cmd;
   cmd.REGNO      = 0x1000 | index;
@@ -244,7 +244,7 @@ void SLDebugger::set_gpr(int index, uint32_t gpr) {
 //-----------------------------------------------------------------------------
 
 uint32_t SLDebugger::get_csr(int index) {
-  assert(halted);
+  //assert(halted);
 
   Reg_COMMAND cmd;
   cmd.REGNO      = index;
@@ -262,7 +262,7 @@ uint32_t SLDebugger::get_csr(int index) {
 //-----------------------------------------------------------------------------
 
 void SLDebugger::set_csr(int index, uint32_t data) {
-  assert(halted);
+  //assert(halted);
 
   Reg_COMMAND cmd;
   cmd.REGNO      = index;
@@ -280,7 +280,7 @@ void SLDebugger::set_csr(int index, uint32_t data) {
 //-----------------------------------------------------------------------------
 
 uint32_t SLDebugger::get_mem(uint32_t addr) {
-  assert(halted);
+  //assert(halted);
 
   static uint32_t prog_get_mem[8] = {
     0xe0000537, // lui  a0, 0xE0000
@@ -306,7 +306,7 @@ uint32_t SLDebugger::get_mem(uint32_t addr) {
 //-----------------------------------------------------------------------------
 
 void SLDebugger::set_mem(uint32_t addr, uint32_t data) {
-  assert(halted);
+  //assert(halted);
 
   static uint32_t prog_put_mem[8] = {
     0xe0000537, // lui  a0, 0xE0000
@@ -349,7 +349,7 @@ void SLDebugger::get_block(uint32_t addr, void* data, int size_dwords) {
 }
 
 void SLDebugger::stream_get_start(uint32_t addr) {
-  assert(halted);
+  //assert(halted);
   load_prog(prog_get_block);
   set_dbg(ADDR_DATA1,   addr);
   set_dbg(ADDR_AUTOCMD, 0x00000001);
@@ -357,12 +357,12 @@ void SLDebugger::stream_get_start(uint32_t addr) {
 }
 
 uint32_t SLDebugger::stream_get_u32() {
-  assert(halted);
+  //assert(halted);
   return get_dbg(ADDR_DATA0);
 }
 
 void SLDebugger::stream_get_end() {
-  assert(halted);
+  //assert(halted);
   set_dbg(ADDR_AUTOCMD, 0x00000000);
 }
 
@@ -397,14 +397,14 @@ void SLDebugger::set_block(uint32_t addr, void* data, int size_dwords) {
 }
 
 void SLDebugger::stream_set_start(uint32_t addr) {
-  assert(halted);
+  //assert(halted);
   load_prog(prog_put_block);
   set_dbg(ADDR_DATA1, addr);
   first_put = true;
 }
 
 void SLDebugger::stream_set_u32(uint32_t data) {
-  assert(halted);
+  //assert(halted);
   set_dbg(ADDR_DATA0, data);
   if (first_put) {
     set_dbg(ADDR_AUTOCMD, 0x00000001);
@@ -414,38 +414,43 @@ void SLDebugger::stream_set_u32(uint32_t data) {
 }
 
 void SLDebugger::stream_set_end() {
-  assert(halted);
+  //assert(halted);
   set_dbg(ADDR_AUTOCMD, 0x00000000);
 }
 
 //------------------------------------------------------------------------------
 
 void SLDebugger::wipe_page(uint32_t addr) {
-  assert(halted);
-  assert(!locked);
-  run_command(0, BIT_CTLR_FTER, BIT_CTLR_FTER | BIT_CTLR_STRT);
+  //assert(halted);
+  //assert(!locked);
+  run_command(addr, BIT_CTLR_FTER, BIT_CTLR_FTER | BIT_CTLR_STRT);
 }
 
 void SLDebugger::wipe_sector(uint32_t addr) {
-  assert(halted);
-  assert(!locked);
-  run_command(0, BIT_CTLR_PER, BIT_CTLR_PER | BIT_CTLR_STRT);
+  //assert(halted);
+  //assert(!locked);
+  run_command(addr, BIT_CTLR_PER, BIT_CTLR_PER | BIT_CTLR_STRT);
 }
 
 void SLDebugger::wipe_chip() {
-  assert(halted);
-  assert(!locked);
-  run_command(0, BIT_CTLR_MER, BIT_CTLR_MER | BIT_CTLR_STRT);
+  //assert(halted);
+  //assert(!locked);
+  run_command(0x08000000, BIT_CTLR_MER, BIT_CTLR_MER | BIT_CTLR_STRT);
 }
 
 //------------------------------------------------------------------------------
 
 void SLDebugger::write_flash(uint32_t dst_addr, uint32_t* data, int size_dwords) {
-  assert(halted);
-  assert(!locked);
+  //assert(halted);
+  //assert(!locked);
 
-  print_to(cb_put, "SLDebugger::write_flash 0x%08x 0x%08x %d\n", dst_addr, data, size_dwords);
+  //log("SLDebugger::write_flash 0x%08x 0x%08x %d\n", dst_addr, data, size_dwords);
+  //log("halted : %d\n", halted);
+  //log("locked : %d\n", locked);
 
+  dst_addr |= 0x08000000;
+
+  halt();
   unlock_flash();
 
   static const uint16_t prog_write_incremental[16] = {
@@ -522,20 +527,20 @@ void SLDebugger::write_flash(uint32_t dst_addr, uint32_t* data, int size_dwords)
 
 void SLDebugger::print_status() {
 
-  Reg_CPBR      (get_dbg(ADDR_CPBR)).dump(cb_put);
-  Reg_CFGR      (get_dbg(ADDR_CFGR)).dump(cb_put);
-  Reg_SHDWCFGR  (get_dbg(ADDR_SHDWCFGR)).dump(cb_put);
-  Reg_DMCONTROL (get_dbg(ADDR_DMCONTROL)).dump(cb_put);
-  Reg_DMSTATUS  (get_dbg(ADDR_DMSTATUS)).dump(cb_put);
-  Reg_ABSTRACTCS(get_dbg(ADDR_ABSTRACTCS)).dump(cb_put);
+  Reg_CPBR      (get_dbg(ADDR_CPBR)).dump(log);
+  Reg_CFGR      (get_dbg(ADDR_CFGR)).dump(log);
+  Reg_SHDWCFGR  (get_dbg(ADDR_SHDWCFGR)).dump(log);
+  Reg_DMCONTROL (get_dbg(ADDR_DMCONTROL)).dump(log);
+  Reg_DMSTATUS  (get_dbg(ADDR_DMSTATUS)).dump(log);
+  Reg_ABSTRACTCS(get_dbg(ADDR_ABSTRACTCS)).dump(log);
 
   if (halted) {
-    Csr_DCSR(get_csr(CSR_DCSR)).dump(cb_put);
-    print_to(cb_put, "dpc:0x%08x  ds0:0x%08x  ds1:0x%08x\n", get_csr(CSR_DPC), get_csr(CSR_DS0), get_csr(CSR_DS1));
-    print_to(cb_put, "\n");
+    Csr_DCSR(get_csr(CSR_DCSR)).dump(log);
+    log("dpc:0x%08x  ds0:0x%08x  ds1:0x%08x\n", get_csr(CSR_DPC), get_csr(CSR_DS0), get_csr(CSR_DS1));
+    log("\n");
   }
   else {
-    print_to(cb_put, "<not halted\n");
+    log("<not halted\n");
   }
 }
 
@@ -543,7 +548,7 @@ void SLDebugger::print_status() {
 // Dumps all ram
 
 void SLDebugger::dump_ram() {
-  assert(halted);
+  //assert(halted);
 
   uint32_t temp[512];
 
@@ -551,9 +556,9 @@ void SLDebugger::dump_ram() {
 
   for (int y = 0; y < 32; y++) {
     for (int x = 0; x < 16; x++) {
-      print_to(cb_put, "0x%08x ", temp[x + y * 16]);
+      log("0x%08x ", temp[x + y * 16]);
     }
-    print_to(cb_put, "\n");
+    log("\n");
   }
 }
 
@@ -561,28 +566,28 @@ void SLDebugger::dump_ram() {
 // Dumps the first 1K of flash.
 
 void SLDebugger::dump_flash() {
-  assert(halted);
+  //assert(halted);
 
-  Reg_FLASH_STATR(get_mem(ADDR_FLASH_STATR)).dump(cb_put);
-  Reg_FLASH_CTLR(get_mem(ADDR_FLASH_CTLR)).dump(cb_put);
-  Reg_FLASH_OBR(get_mem(ADDR_FLASH_OBR)).dump(cb_put);
-  print_to(cb_put, "flash_wpr 0x%08x\n", get_mem(ADDR_FLASH_WPR));
+  Reg_FLASH_STATR(get_mem(ADDR_FLASH_STATR)).dump(log);
+  Reg_FLASH_CTLR(get_mem(ADDR_FLASH_CTLR)).dump(log);
+  Reg_FLASH_OBR(get_mem(ADDR_FLASH_OBR)).dump(log);
+  log("flash_wpr 0x%08x\n", get_mem(ADDR_FLASH_WPR));
 
   uint32_t temp[256];
   get_block(0x08000000, temp, 256);
   //for (int y = 0; y < 32; y++) {
   for (int y = 0; y < 24; y++) {
     for (int x = 0; x < 8; x++) {
-      print_to(cb_put, "0x%08x ", temp[x + y * 8]);
+      log("0x%08x ", temp[x + y * 8]);
     }
-    print_to(cb_put, "\n");
+    log("\n");
   }
 }
 
 //-----------------------------------------------------------------------------
 
 bool SLDebugger::test_mem() {
-  assert(halted);
+  //assert(halted);
 
   uint32_t base = 0x20000000;
   int size_dwords = 512;
@@ -597,14 +602,14 @@ bool SLDebugger::test_mem() {
     addr = base + (4 * i);
     uint32_t data = get_mem(addr);
     if (data != 0xBEEF0000 + i) {
-      print_to(cb_put, "Memory test fail at 0x%08x : expected 0x%08x, got 0x%08x\n", addr, 0xBEEF0000 + i, data);
+      log("Memory test fail at 0x%08x : expected 0x%08x, got 0x%08x\n", addr, 0xBEEF0000 + i, data);
       fail = true;
     }
   }
 
   Reg_ABSTRACTCS reg_abstractcs = get_dbg(ADDR_ABSTRACTCS);
   if (reg_abstractcs.CMDER) {
-    print_to(cb_put, "Memory test fail, CMDER=%d\n", reg_abstractcs.CMDER);
+    log("Memory test fail, CMDER=%d\n", reg_abstractcs.CMDER);
     fail = true;
   }
 
@@ -615,7 +620,7 @@ bool SLDebugger::test_mem() {
 //-----------------------------------------------------------------------------
 
 void SLDebugger::run_command(uint32_t addr, uint32_t ctl1, uint32_t ctl2) {
-  assert(halted);
+  //assert(halted);
 
   static const uint16_t prog_run_command[16] = {
     0xc94c, // sw      a1,20(a0)

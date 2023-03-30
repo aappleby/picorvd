@@ -114,12 +114,10 @@ unsigned int blink_bin_len = 592;
 
 Log dblog(ser_put);
 SLDebugger sl;
-GDBServer server(&sl, usb_get, usb_put, dblog);
+GDBServer server(&sl, dblog);
 
 int main() {
   stdio_usb_init();
-
-  //assert(false);
 
   // Enable non-USB serial port on gpio 0/1 for meta-debug output :D
   uart_init(uart0, 1000000);
@@ -127,7 +125,7 @@ int main() {
   gpio_set_function(1, GPIO_FUNC_UART);
 
 
-  sl.init(SWD_PIN, usb_put);
+  sl.init(SWD_PIN, dblog);
   sl.reset();
 
   //log("\033[2J");
@@ -163,14 +161,22 @@ int main() {
   dblog("\n>> ");
   server.state = GDBServer::RECV_PREFIX;
 
+  char byte_out;
+  bool byte_oe;
+
   while(1) {
     if (server.sending) {
-      server.update(true, 0);
+      server.update(true, 0, false, byte_out, byte_oe);
     }
     else {
       auto b = usb_get();
       dblog("%c", isprint(b) ? b : '_');
-      server.update(true, b);
+      server.update(true, b, true, byte_out, byte_oe);
+    }
+
+    if (byte_oe) {
+      dblog("%c", isprint(byte_out) ? byte_out : '_');
+      usb_put(byte_out);
     }
   }
 

@@ -6,12 +6,20 @@
 const char* memory_map = R"(<?xml version="1.0"?>
 <!DOCTYPE memory-map PUBLIC "+//IDN gnu.org//DTD GDB Memory Map V1.0//EN" "http://sourceware.org/gdb/gdb-memory-map.dtd">
 <memory-map>
-  <memory type="flash" start="0x08000000" length="0x4000">
+  <memory type="flash" start="0x00000000" length="0x4000">
     <property name="blocksize">64</property>
   </memory>
   <memory type="ram" start="0x20000000" length="0x800"/>
 </memory-map>
 )";
+
+GDBServer::GDBServer(SLDebugger* sl, Log log)
+: sl(sl), log(log) {
+
+  this->page_base = -1;
+  this->page_bitmap = 0;
+  for (int i = 0; i < 64; i++) this->page_cache[i] = 0xFF;
+}
 
 //------------------------------------------------------------------------------
 /*
@@ -53,14 +61,6 @@ const GDBServer::handler GDBServer::handler_tab[] = {
 };
 
 const int GDBServer::handler_count = sizeof(GDBServer::handler_tab) / sizeof(GDBServer::handler_tab[0]);
-
-//------------------------------------------------------------------------------
-
-void GDBServer::put_byte(char b) {
-  //send_checksum += b;
-  log("%c", isprint(b) ? b : '_');
-  cb_put(b);
-}
 
 //------------------------------------------------------------------------------
 // Report why the CPU halted
@@ -370,14 +370,13 @@ void GDBServer::handle_v() {
 void GDBServer::flash_erase(int addr, int size) {
   // Erases must be page-aligned
   if ((addr & 0x3F) || (size & 0x3F)) {
-    log("\n");
-    log("Bad vFlashErase - addr %x size %x\n", addr, size);
+    log("\nBad vFlashErase - addr %x size %x\n", addr, size);
     send.set_packet("E00");
     return;
   }
 
   while(1) {
-    if (addr == 0x08000000 && size == 0x4000) {
+    if (addr == 0x00000000 && size == 0x4000) {
       log("erase chip 0x%08x\n", addr);
       sl->wipe_chip();
       send.set_packet("OK");
@@ -408,10 +407,10 @@ void GDBServer::put_flash_cache(int addr, uint8_t data) {
   int page_offset = addr & 0x3F;
   int page_base   = addr & ~0x3F;
 
-  if (page_base != this->page_base) {
+  if (this->page_bitmap && page_base != this->page_base) {
     flush_flash_cache();
-    this->page_base = page_base;
   }
+  this->page_base = page_base;
 
   if (this->page_bitmap & (1 << page_offset)) {
     log("\nByte in flash page written multiple times\n");
@@ -425,14 +424,22 @@ void GDBServer::put_flash_cache(int addr, uint8_t data) {
 //------------------------------------------------------------------------------
 
 void GDBServer::flush_flash_cache() {
-  if (page_bitmap == 0) {
-    // empty page cache, nothing to do
-    //log("empty page write at    0x%08x\n", this->page_base);
-  }
-  else if (page_bitmap == 0xFFFFFFFFFFFFFFFF) {
-    // full page write
-    log("full page write at    0x%08x\n", this->page_base);
+  if (page_base == -1) return;
 
+  if (!page_bitmap) {
+    // empty page cache, nothing to do
+    log("empty page write at    0x%08x\n", this->page_base);
+  }
+  else  {
+    if (page_bitmap == 0xFFFFFFFFFFFFFFFF) {
+      // full page write
+      log("full page write at    0x%08x\n", this->page_base);
+    }
+    else {
+      log("partial page write at 0x%08x, mask 0x%016llx\n", this->page_base, this->page_bitmap);
+    }
+
+    /*
     uint32_t* cursor = (uint32_t*)page_cache;
     for (int y = 0; y < 4; y++) {
       for (int x = 0; x < 4; x++) {
@@ -440,41 +447,13 @@ void GDBServer::flush_flash_cache() {
       }
       log("\n");
     }
-    sl->write_flash(page_base, (uint32_t*)page_cache, 16);
-  }
-  else {
-    // partial page write
-    log("partial page write at 0x%08x, mask 0x%016llx\n", this->page_base, this->page_bitmap);
-
-    // Merge the page cache with the current page in flash
-    uint32_t current_page[16];
-    for (int i = 0; i < 16; i++) {
-      current_page[i] = sl->get_mem(page_base + 4*i);
-    }
-
-
-
-    uint8_t* cursor = (uint8_t*)current_page;
-    for (int i = 0; i < 64; i++) {
-      if ((page_bitmap & (1ull << i)) == 0) {
-        page_cache[i] = cursor[i];
-      }
-    }
-
-    uint32_t* cursor2 = (uint32_t*)page_cache;
-    for (int y = 0; y < 4; y++) {
-      for (int x = 0; x < 4; x++) {
-        log("0x%08x ", cursor2[x + y * 4]);
-      }
-      log("\n");
-    }
-
+    */
     sl->write_flash(page_base, (uint32_t*)page_cache, 16);
   }
 
   this->page_bitmap = 0;
   this->page_base = -1;
-  for (int i = 0; i < 64; i++) this->page_cache[i] = 0;
+  for (int i = 0; i < 64; i++) this->page_cache[i] = 0xFF;
 }
 
 //------------------------------------------------------------------------------
@@ -501,129 +480,154 @@ void GDBServer::handle_packet() {
     }
   }
   else {
-    log("No handler for command %s\n", recv.buf);
+    log("\nNo handler for command %s\n", recv.buf);
     send.set_packet("");
   }
 
   if (!send.packet_valid) {
-    log("Handler created a bad packet '%s'\n", send.buf);
+    log("\nHandler created a bad packet '%s'\n", send.buf);
     send.set_packet("");
   }
 }
 
 //------------------------------------------------------------------------------
 
-void GDBServer::update(bool connected, char c) {
+void GDBServer::update(bool connected, char byte_in, bool byte_ie, char& byte_out, bool& byte_oe) {
+  byte_out = 0;
+  byte_oe = 0;
+
   switch(state) {
-    case RECV_PREFIX:
+    case RECV_PREFIX: {
       // Wait for start char
-      if (c == '$') {
+      if (byte_in == '$') {
         state = RECV_PACKET;
         recv.clear();
         checksum = 0;
       }
       break;
+    }
 
-    case RECV_PACKET:
+    case RECV_PACKET: {
       // Add bytes to packet until we see the end char
       // Checksum is for the _escaped_ data.
-      if (c == '#') {
+      if (byte_in == '#') {
         expected_checksum = 0;
         state = RECV_SUFFIX1;
       }
-      else if (c == '}') {
-        checksum += c;
+      else if (byte_in == '}') {
+        checksum += byte_in;
         state = RECV_PACKET_ESCAPE;
       }
       else {
-        checksum += c;
-        recv.put_buf(c);
+        checksum += byte_in;
+        recv.put_buf(byte_in);
       }
       break;
+    }
 
-    case RECV_PACKET_ESCAPE:
-      checksum += c;
-      recv.put_buf(c ^ 0x20);
+    case RECV_PACKET_ESCAPE: {
+      checksum += byte_in;
+      recv.put_buf(byte_in ^ 0x20);
+      state = RECV_PACKET;
       break;
+    }
 
-    case RECV_SUFFIX1:
-      expected_checksum = (expected_checksum << 4) | from_hex(c);
+    case RECV_SUFFIX1: {
+      expected_checksum = (expected_checksum << 4) | from_hex(byte_in);
       state = RECV_SUFFIX2;
       break;
+    }
 
-    case RECV_SUFFIX2:
-      expected_checksum = (expected_checksum << 4) | from_hex(c);
+    case RECV_SUFFIX2: {
+
+      expected_checksum = (expected_checksum << 4) | from_hex(byte_in);
 
       if (checksum != expected_checksum) {
         log("\n");
         log("Packet transmission error\n");
         log("expected checksum 0x%02x\n", expected_checksum);
         log("actual checksum   0x%02x\n", checksum);
-        put_byte('-');
+        byte_out = '-';
+        byte_oe = true;
         state = RECV_PREFIX;
       }
       else {
         // Packet checksum OK, handle it.
-        put_byte('+');
+        byte_out = '+';
+        byte_oe = true;
         handle_packet();
         sending = true;
         state = SEND_PREFIX;
       }
       break;
+    }
 
-    case SEND_PREFIX:
+    case SEND_PREFIX: {
       log("\n<< ");
-      put_byte('$');
+      byte_out = '$';
+      byte_oe = true;
       checksum = 0;
       state = send.size ? SEND_PACKET : SEND_SUFFIX1;
       send.cursor = 0;
       break;
+    }
 
     case SEND_PACKET: {
       char c = send.buf[send.cursor];
       if (c == '#' || c == '$' || c == '}' || c == '*') {
         checksum += '}';
-        put_byte('}');
-        checksum += c ^ 0x20;
-        put_byte(c ^ 0x20);
+        byte_out = '}';
+        byte_oe = true;
+        state = SEND_PACKET_ESCAPE;
+        break;
       }
       else {
         checksum += c;
-        put_byte(c);
+        byte_out = c;
+        byte_oe = true;
+        send.cursor++;
+        if (send.cursor == send.size) {
+          state = SEND_SUFFIX1;
+        }
+        break;
       }
-      send.cursor++;
-      if (send.cursor == send.size) {
-        state = SEND_SUFFIX1;
-      }
+    }
+
+    case SEND_PACKET_ESCAPE: {
+      char c = send.buf[send.cursor];
+      checksum += c ^ 0x20;
+      byte_out = c ^ 0x20;
+      byte_oe = true;
+      state = SEND_PACKET;
       break;
     }
 
-    case SEND_PACKET_ESCAPE:
-      break;
-
     case SEND_SUFFIX1:
-      put_byte('#');
+      byte_out = '#';
+      byte_oe = true;
       state = SEND_SUFFIX2;
       break;
 
     case SEND_SUFFIX2:
-      put_byte(to_hex((checksum >> 4) & 0xF));
+      byte_out = to_hex((checksum >> 4) & 0xF);
+      byte_oe = true;
       state = SEND_SUFFIX3;
       break;
 
     case SEND_SUFFIX3:
-      put_byte(to_hex((checksum >> 0) & 0xF));
+      byte_out = to_hex((checksum >> 0) & 0xF);
+      byte_oe = true;
       sending = false;
       state = RECV_ACK;
       break;
 
 
-    case RECV_ACK:
-      if (c == '+') {
+    case RECV_ACK: {
+      if (byte_in == '+') {
         log("\n>> ");
         state = RECV_PREFIX;
       }
-      else if (c == '-') {
+      else if (byte_in == '-') {
         log("========================\n");
         log("========  NACK  ========\n");
         log("========================\n");
@@ -631,11 +635,10 @@ void GDBServer::update(bool connected, char c) {
         state = SEND_PACKET;
       }
       else {
-        // FIXME - are we still seeing this? YES - nulls
-        //log("garbage ack char %d '%c'\n", c, c);
-        //return false;
+        log("garbage ack char %d '%c'\n", byte_in, byte_in);
       }
       break;
+    }
   }
 }
 

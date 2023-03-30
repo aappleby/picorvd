@@ -7,6 +7,7 @@
 
 class Log {
 public:
+  Log() {}
   Log(putter cb_put) : cb_put(cb_put) {}
 
   void operator()(const char* fmt, ...) {
@@ -49,7 +50,7 @@ private:
     print_to(cb_put, "\u001b[0m");
   }
 
-  putter cb_put;
+  putter cb_put = nullptr;
 };
 
 //------------------------------------------------------------------------------
