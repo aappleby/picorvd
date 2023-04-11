@@ -1,6 +1,5 @@
 #pragma once
 #include "utils.h"
-#include "log.h"
 #include "SLDebugger.h"
 #include "GDBPacket.h"
 
@@ -9,7 +8,8 @@
 struct GDBServer {
 public:
 
-  GDBServer(SLDebugger* sl, Log log);
+  GDBServer();
+  void init(SLDebugger* sl);
 
   void update(bool connected, char byte_in, bool byte_ie, char& byte_out, bool& byte_oe);
 
@@ -44,6 +44,8 @@ public:
   void handle_R();
   void handle_s();
   void handle_v();
+  void handle_z();
+  void handle_Z();
 
 //private:
 
@@ -56,9 +58,6 @@ public:
   SLDebugger* sl;
   GDBPacket   send;
   GDBPacket   recv;
-  Log         log;
-
-  bool   sending = false;
 
   int flash_cursor;
   uint64_t flash_write_bitmap;

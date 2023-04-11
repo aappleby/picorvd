@@ -1,19 +1,17 @@
 {
 	"folders": [
-		{
-			"path": "."
-		},
-		{
-			"path": "../pico-sdk"
-		},
-		{
-			"path": "../pico-examples"
-		}
-	],
+    {
+      "path": "."
+    }
+  ],
   "settings": {
     "files.associations": {
       "*.pio": "c",
-      "*.inc": "cpp"
+      "*.inc": "cpp",
+      "cdc_device.h": "c",
+      "tusb_common.h": "c",
+      "tusb_option.h": "c",
+      "tusb_config.h": "c"
     }
   }
 }

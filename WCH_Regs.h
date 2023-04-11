@@ -1,62 +1,31 @@
 #pragma once
-#include <stdint.h>
-#include "utils.h"
-#include "log.h"
+#include "debug_defines.h"
+
+//------------------------------------------------------------------------------
+// WCH-specific debug interface config registers
+
+const uint8_t DM_CPBR         = 0x7C;
+const uint8_t DM_CFGR         = 0x7D;
+const uint8_t DM_SHDWCFGR     = 0x7E;
+const uint8_t DM_PART         = 0x7F; // not in doc but appears to be part info
 
 //------------------------------------------------------------------------------
 
-const uint32_t ADDR_ESIG_FLACAP = 0x1FFFF7E0; // Flash capacity register 0xXXXX
-const uint32_t ADDR_ESIG_UNIID1 = 0x1FFFF7E8; // UID register 1 0xXXXXXXXX
-const uint32_t ADDR_ESIG_UNIID2 = 0x1FFFF7EC; // UID register 2 0xXXXXXXXX
-const uint32_t ADDR_ESIG_UNIID3 = 0x1FFFF7F0; // UID register 3 0xXXXXXXXX
+const uint32_t ADDR_ESIG_FLACAP  = 0x1FFFF7E0; // Flash capacity register 0xXXXX
+const uint32_t ADDR_ESIG_UNIID1  = 0x1FFFF7E8; // UID register 1 0xXXXXXXXX
+const uint32_t ADDR_ESIG_UNIID2  = 0x1FFFF7EC; // UID register 2 0xXXXXXXXX
+const uint32_t ADDR_ESIG_UNIID3  = 0x1FFFF7F0; // UID register 3 0xXXXXXXXX
 
-//------------------------------------------------------------------------------
-
-const uint8_t ADDR_DATA0        = 0x04;
-const uint8_t ADDR_DATA1        = 0x05;
-
-const uint8_t ADDR_DMCONTROL    = 0x10;
-const uint8_t ADDR_DMSTATUS     = 0x11;
-const uint8_t ADDR_HARTINFO     = 0x12;
-const uint8_t ADDR_ABSTRACTCS   = 0x16;
-const uint8_t ADDR_COMMAND      = 0x17;
-const uint8_t ADDR_AUTOCMD      = 0x18;
-
-const uint8_t ADDR_BUF0         = 0x20;
-const uint8_t ADDR_BUF1         = 0x21;
-const uint8_t ADDR_BUF2         = 0x22;
-const uint8_t ADDR_BUF3         = 0x23;
-const uint8_t ADDR_BUF4         = 0x24;
-const uint8_t ADDR_BUF5         = 0x25;
-const uint8_t ADDR_BUF6         = 0x26;
-const uint8_t ADDR_BUF7         = 0x27;
-
-const uint8_t ADDR_HALTSUM0     = 0x40;
-
-// DCSR and DPC are mentioned in the debug pdf but don't appear to be present
-
-const uint8_t ADDR_CPBR         = 0x7C;
-const uint8_t ADDR_CFGR         = 0x7D;
-const uint8_t ADDR_SHDWCFGR     = 0x7E;
-const uint8_t ADDR_PART         = 0x7F; // not in doc but appears to be part info
-
-//------------------------------------------------------------------------------
-
-const uint32_t ADDR_FLASH_ACTLR = 0x40022000;
-const uint32_t ADDR_FLASH_KEYR = 0x40022004;
+const uint32_t ADDR_FLASH_ACTLR  = 0x40022000;
+const uint32_t ADDR_FLASH_KEYR   = 0x40022004;
 const uint32_t ADDR_FLASH_OBKEYR = 0x40022008;
-const uint32_t ADDR_FLASH_STATR = 0x4002200C;
-const uint32_t ADDR_FLASH_CTLR = 0x40022010;
-const uint32_t ADDR_FLASH_ADDR = 0x40022014;
-const uint32_t ADDR_FLASH_OBR = 0x4002201C;
-const uint32_t ADDR_FLASH_WPR = 0x40022020;
-const uint32_t ADDR_FLASH_MKEYR = 0x40022024;
-const uint32_t ADDR_FLASH_BKEYR = 0x40022028;
-
-const uint32_t CSR_DCSR = 0x7B0;
-const uint32_t CSR_DPC  = 0x7B1;
-const uint32_t CSR_DS0  = 0x7B2;
-const uint32_t CSR_DS1  = 0x7B3;
+const uint32_t ADDR_FLASH_STATR  = 0x4002200C;
+const uint32_t ADDR_FLASH_CTLR   = 0x40022010;
+const uint32_t ADDR_FLASH_ADDR   = 0x40022014;
+const uint32_t ADDR_FLASH_OBR    = 0x4002201C;
+const uint32_t ADDR_FLASH_WPR    = 0x40022020;
+const uint32_t ADDR_FLASH_MKEYR  = 0x40022024;
+const uint32_t ADDR_FLASH_BKEYR  = 0x40022028;
 
 //------------------------------------------------------------------------------
 
@@ -80,9 +49,9 @@ struct Reg_CPBR {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_CPBR = 0x%08x\n", raw);
-    log("  TDIV:%d  SOPN:%d  CHECKSTA:%d  CMDEXTENSTA:%d  OUTSTA:%d  IOMODE:%d  VERSION:%d\n",
+  void dump() {
+    printf("Reg_CPBR = 0x%08x\n", raw);
+    printf("  TDIV:%d  SOPN:%d  CHECKSTA:%d  CMDEXTENSTA:%d  OUTSTA:%d  IOMODE:%d  VERSION:%d\n",
       TDIV, SOPN, CHECKSTA, CMDEXTENSTA, OUTSTA, IOMODE, VERSION);
   }
 };
@@ -110,9 +79,9 @@ struct Reg_CFGR {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_CFGR = 0x%08x\n", raw);
-    log("  TDIVCFG:%d  SOPNCFG:%d  CHECKEN:%d  CMDEXTEN:%d  OUTEN:%d  IOMODECFG:%d  KEY:0x%04x\n",
+  void dump() {
+    printf("Reg_CFGR = 0x%08x\n", raw);
+    printf("  TDIVCFG:%d  SOPNCFG:%d  CHECKEN:%d  CMDEXTEN:%d  OUTEN:%d  IOMODECFG:%d  KEY:0x%04x\n",
       TDIVCFG, SOPNCFG, CHECKEN, CMDEXTEN, OUTEN, IOMODECFG, KEY);
   }
 };
@@ -140,9 +109,9 @@ struct Reg_SHDWCFGR {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_SHDWCFGR    = 0x%08x\n", raw);
-    log("  TDIVCFG:%d  SOPNCFG:%d  CHECKEN:%d  CMDEXTEN:%d  OUTEN:%d  IOMODECFG:%d  KEY:0x%04x\n",
+  void dump() {
+    printf("Reg_SHDWCFGR = 0x%08x\n", raw);
+    printf("  TDIVCFG:%d  SOPNCFG:%d  CHECKEN:%d  CMDEXTEN:%d  OUTEN:%d  IOMODECFG:%d  KEY:0x%04x\n",
       TDIVCFG, SOPNCFG, CHECKEN, CMDEXTEN, OUTEN, IOMODECFG, KEY);
   }
 };
@@ -167,9 +136,9 @@ struct Reg_DMCONTROL {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_DMCONTROL   = 0x%08x\n", raw);
-    log("  DMACTIVE:%d  NDMRESET:%d  ACKHAVERESET:%d  RESUMEREQ:%d  HALTREQ:%d\n",
+  void dump() {
+    printf("Reg_DMCONTROL = 0x%08x\n", raw);
+    printf("  DMACTIVE:%d  NDMRESET:%d  ACKHAVERESET:%d  RESUMEREQ:%d  HALTREQ:%d\n",
       DMACTIVE, NDMRESET, ACKHAVERESET, RESUMEREQ, HALTREQ);
   }
 };
@@ -202,11 +171,11 @@ struct Reg_DMSTATUS {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_DMSTATUS    = 0x%08x\n", raw);
-    log("  VERSION:%d  AUTHENTICATED:%d\n", VERSION, AUTHENTICATED);
-    log("  ANYHALTED:%d  ANYRUNNING:%d  ANYAVAIL:%d ANYRESUMEACK:%d  ANYHAVERESET:%d\n", ANYHALTED, ANYRUNNING, ANYAVAIL, ANYRESUMEACK, ANYHAVERESET);
-    log("  ALLHALTED:%d  ALLRUNNING:%d  ALLAVAIL:%d ALLRESUMEACK:%d  ALLHAVERESET:%d\n", ALLHALTED, ALLRUNNING, ALLAVAIL, ALLRESUMEACK, ALLHAVERESET);
+  void dump() {
+    printf("Reg_DMSTATUS = 0x%08x\n", raw);
+    printf("  VERSION:%d  AUTHENTICATED:%d\n", VERSION, AUTHENTICATED);
+    printf("  ANYHALTED:%d  ANYRUNNING:%d  ANYAVAIL:%d ANYRESUMEACK:%d  ANYHAVERESET:%d\n", ANYHALTED, ANYRUNNING, ANYAVAIL, ANYRESUMEACK, ANYHAVERESET);
+    printf("  ALLHALTED:%d  ALLRUNNING:%d  ALLAVAIL:%d ALLRESUMEACK:%d  ALLHAVERESET:%d\n", ALLHALTED, ALLRUNNING, ALLAVAIL, ALLRESUMEACK, ALLHAVERESET);
   }
 };
 static_assert(sizeof(Reg_DMSTATUS) == 4);
@@ -229,9 +198,9 @@ struct Reg_HARTINFO {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_HARTINFO    = 0x%08x\n", raw);
-    log("  DATAADDR:%d  DATASIZE:%d  DATAACCESS:%d  NSCRATCH:%d\n",
+  void dump() {
+    printf("Reg_HARTINFO = 0x%08x\n", raw);
+    printf("  DATAADDR:%d  DATASIZE:%d  DATAACCESS:%d  NSCRATCH:%d\n",
       DATAADDR, DATASIZE, DATAACCESS, NSCRATCH);
   }
 };
@@ -257,9 +226,9 @@ struct Reg_ABSTRACTCS {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_ABSTRACTCS  = 0x%08x\n", raw);
-    log("  DATACOUNT:%d  CMDER:%d  BUSY:%d  PROGBUFSIZE:%d\n",
+  void dump() {
+    printf("Reg_ABSTRACTCS = 0x%08x\n", raw);
+    printf("  DATACOUNT:%d  CMDER:%d  BUSY:%d  PROGBUFSIZE:%d\n",
       DATACOUNT, CMDER, BUSY, PROGBUFSIZE);
   }
 };
@@ -285,15 +254,10 @@ struct Reg_COMMAND {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_COMMAND     = 0x%08x\n", raw);
-    log("  REGNO         = 0x%x\n", REGNO      );
-    log("  WRITE         = %d\n", WRITE      );
-    log("  TRANSFER      = %d\n", TRANSFER   );
-    log("  POSTEXEC      = %d\n", POSTEXEC   );
-    log("  AARPOSTINC    = %d\n", AARPOSTINC );
-    log("  AARSIZE       = %d\n", AARSIZE    );
-    log("  CMDTYPE       = %d\n", CMDTYPE    );
+  void dump() {
+    printf("Reg_COMMAND = 0x%08x\n", raw);
+    printf("  REGNO:%d  WRITE:%d  TRANSFER:%d  POSTEXEC:%d  AARPOSTINC:%d  AARSIZE:%d  CMDTYPE:%d\n",
+      REGNO, WRITE, TRANSFER, POSTEXEC, AARPOSTINC, AARSIZE, CMDTYPE);
   }
 };
 static_assert(sizeof(Reg_COMMAND) == 4);
@@ -313,10 +277,10 @@ struct Reg_AUTOCMD {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_AUTOCMD     = 0x%08x\n", raw);
-    log("  AUTOEXECDATA  = %d\n", AUTOEXECDATA);
-    log("  AUTOEXECPROG  = %d\n", AUTOEXECPROG);
+  void dump() {
+    printf("Reg_AUTOCMD = 0x%08x\n", raw);
+    printf("  AUTOEXECDATA:%d  AUTOEXECPROG:%d\n",
+      AUTOEXECDATA, AUTOEXECPROG);
   }
 };
 static_assert(sizeof(Reg_AUTOCMD) == 4);
@@ -335,9 +299,9 @@ struct Reg_HALTSUM0 {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_HALTSUM0    = 0x%08x\n", raw);
-    log("  HALTSUM0      = %d\n", HALTSUM0);
+  void dump() {
+    printf("Reg_HALTSUM0    = 0x%08x\n", raw);
+    printf("  HALTSUM0      = %d\n", HALTSUM0);
   }
 };
 static_assert(sizeof(Reg_HALTSUM0) == 4);
@@ -352,24 +316,27 @@ struct Csr_DCSR {
     struct {
       uint32_t PRV       : 2;
       uint32_t STEP      : 1;
-      uint32_t PAD0      : 3;
+      uint32_t NMIP      : 1;
+      uint32_t MPRVEN    : 1;
+      uint32_t PAD0      : 1;
       uint32_t CAUSE     : 3;
       uint32_t STOPTIME  : 1;
-      uint32_t PAD1      : 1;
+      uint32_t STOPCOUNT : 1;
       uint32_t STEPIE    : 1;
       uint32_t EBREAKU   : 1;
-      uint32_t PAD2      : 2;
+      uint32_t EBREAKS   : 1;
+      uint32_t PAD1      : 1;
       uint32_t EBREAKM   : 1;
       uint32_t PAD3      : 12;
       uint32_t XDEBUGVER : 4;
     };
-    uint32_t raw;
+    uint32_t raw = 0;
   };
 
-  void dump(Log log) {
-    log("Reg_DCSR        = 0x%08x\n", raw);
-    log("  PRV:%d  STEP:%d  CAUSE:%d  STOPTIME:%d  STEPIE:%d  EBREAKU:%d  EBREAKM:%d  XDEBUGVER:%d\n",
-      PRV, STEP, CAUSE, STOPTIME, STEPIE, EBREAKU, EBREAKM, XDEBUGVER);
+  void dump() {
+    printf("Reg_DCSR        = 0x%08x\n", raw);
+    printf("  PRV:%d  STEP:%d  NMIP:%d  MPRVEN:%d  CAUSE:%d  STOPTIME:%d  STEPIE:%d  EBREAKU:%d  EBREAKS:%d  EBREAKM:%d  XDEBUGVER:%d\n",
+      PRV, STEP, NMIP, MPRVEN, CAUSE, STOPTIME, STEPIE, EBREAKU, EBREAKS, EBREAKM, XDEBUGVER);
   }
 };
 static_assert(sizeof(Csr_DCSR) == 4);
@@ -392,12 +359,10 @@ struct Reg_DBGMCU_CR {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_DBGMCU_CR = 0x%08x\n", raw);
-    log("  IWDG_STOP   = %d\n", IWDG_STOP );
-    log("  WWDG_STOP   = %d\n", WWDG_STOP );
-    log("  TIM1_STOP   = %d\n", TIM1_STOP );
-    log("  TIM2_STOP   = %d\n", TIM2_STOP );
+  void dump() {
+    printf("Reg_DBGMCU_CR = 0x%08x\n", raw);
+    printf("  IWDG_STOP:%d  WWDG_STOP:%d  TIM1_STOP:%d  TIM2_STOP:%d\n",
+      IWDG_STOP, WWDG_STOP, TIM1_STOP, TIM2_STOP);
   }
 };
 static_assert(sizeof(Reg_DBGMCU_CR) == 4);
@@ -416,9 +381,10 @@ struct Reg_FLASH_ACTLR {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_FLASH_ACTLR = 0x%08x\n", raw);
-    log("  LATENCY       = %d\n", LATENCY);
+  void dump() {
+    printf("Reg_FLASH_ACTLR = 0x%08x\n", raw);
+    printf("  LATENCY:%d\n",
+      LATENCY);
   }
 };
 static_assert(sizeof(Reg_FLASH_ACTLR) == 4);
@@ -443,11 +409,10 @@ struct Reg_FLASH_STATR {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_FLASH_STATR = 0x%08x\n", raw);
-    log("  BUSY     = %d   MODE      = %d\n", BUSY,     MODE      );
-    log("  WRPRTERR = %d   BOOT_LOCK = %d\n", WRPRTERR, BOOT_LOCK );
-    log("  EOP      = %d                 \n", EOP                 );
+  void dump() {
+    printf("Reg_FLASH_STATR = 0x%08x\n", raw);
+    printf("  BUSY:%d  WRPRTERR:%d  EOP:%d  MODE:%d  BOOT_LOCK:%d\n",
+      BUSY, WRPRTERR, EOP, MODE, BOOT_LOCK);
   }
 };
 static_assert(sizeof(Reg_FLASH_STATR) == 4);
@@ -502,12 +467,12 @@ struct Reg_FLASH_CTLR {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_FLASH_CTLR  = 0x%08x\n", raw);
-    log("  PG  = %d   OBER  = %d   ERRIE = %d   FTER    = %d\n", PG , OBER , ERRIE, FTER   );
-    log("  PER = %d   STRT  = %d   EOPIE = %d   BUFLOAD = %d\n", PER, STRT , EOPIE, BUFLOAD);
-    log("  MER = %d   LOCK  = %d   FLOCK = %d   BUFRST  = %d\n", MER, LOCK , FLOCK, BUFRST );
-    log("  OBG = %d   OBWRE = %d   FTPG  = %d               \n", OBG, OBWRE, FTPG          );
+  void dump() {
+    printf("Reg_FLASH_CTLR = 0x%08x\n", raw);
+    printf("  PG:%d  PER:%d  MER:%d  OBG:%d  OBER:%d  STRT:%d  LOCK:%d\n",
+      PG, PER, MER, OBG, OBER, STRT, LOCK);
+    printf("  OBWRE:%d  ERRIE:%d  EOPIE:%d  FLOCK:%d  FTPG:%d  FTER:%d  BUFLOAD:%d  BUFRST:%d\n",
+      OBWRE, ERRIE, EOPIE, FLOCK, FTPG, FTER, BUFLOAD, BUFRST);
   }
 };
 static_assert(sizeof(Reg_FLASH_CTLR) == 4);
@@ -534,12 +499,10 @@ struct Reg_FLASH_OBR {
     uint32_t raw;
   };
 
-  void dump(Log log) {
-    log("Reg_FLASH_OBR   = 0x%08x\n", raw);
-    log("  OBERR       = %d   CFGRSTT = %d\n", OBERR,      CFGRSTT);
-    log("  RDPRT       = %d   DATA0   = %d\n", RDPRT,      DATA0  );
-    log("  IWDG_SW     = %d   DATA1   = %d\n", IWDG_SW,    DATA1  );
-    log("  STANDBY_RST = %d               \n", STANDBY_RST        );
+  void dump() {
+    printf("Reg_FLASH_OBR = 0x%08x\n", raw);
+    printf("  OBERR:%d  RDPRT:%d  IWDG_SW:%d  STANDBY_RST:%d  CFGRSTT:%d  DATA0:%d  DATA1:%d\n",
+      OBERR, RDPRT, IWDG_SW, STANDBY_RST, CFGRSTT, DATA0, DATA1);
   }
 
 };

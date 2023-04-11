@@ -1,4 +1,10 @@
 #pragma once
+#include <stdint.h>
+#include "utils.h"
+
+enum class ParseError {
+  ERROR
+};
 
 struct GDBPacket {
 
@@ -64,26 +70,22 @@ struct GDBPacket {
     }
   }
 
-  int take_i32() {
-    int sign = match('-') ? -1 : 1;
-
-    int accum = 0;
-    bool any_digits = false;
-
-    int digit = 0;
-    for (int i = 0; i < 8; i++) {
-      if (!from_hex(peek_char(), digit)) break;
-      accum = (accum << 4) | digit;
-      any_digits = true;
-      cursor++;
+  void take(char c) {
+    char d = take_char();
+    if (c != d) {
+      error = true;
     }
-
-    if (!any_digits) error = true;
-    return sign * accum;
   }
 
-  unsigned int take_u32() {
-    unsigned int accum = 0;
+  void take(const char* s) {
+    while(*s) take(*s++);
+  }
+
+  //----------------------------------------
+  // Take variable-length hex int from packet
+
+  unsigned int take_hex() {
+    int accum = 0;
     bool any_digits = false;
 
     int digit = 0;
@@ -98,15 +100,107 @@ struct GDBPacket {
     return accum;
   }
 
-  void take(char c) {
-    char d = take_char();
-    if (c != d) {
-      error = true;
+  //----------------------------------------
+
+  bool maybe_take_hex(uint32_t& out) {
+    auto old_error = error;
+    auto old_cursor = cursor;
+    auto new_out = take_hex();
+    if (error) {
+      error = old_error;
+      cursor = old_cursor;
+      return false;
+    }
+    else {
+      out = new_out;
+      return true;
     }
   }
 
-  void take(const char* s) {
-    while(*s) take(*s++);
+  //----------------------------------------
+
+  typedef Result<uint32_t, ParseError> Res;
+
+  Res take_hex2() {
+    auto old_error = error;
+    auto old_cursor = cursor;
+    uint32_t out = take_hex();
+    if (error) {
+      error = old_error;
+      cursor = old_cursor;
+      return ParseError::ERROR;
+    }
+    else {
+      return out;
+    }
+  }
+
+  //----------------------------------------
+  // Take fixed-length hex int from packet
+
+  uint32_t take_hex(int digits) {
+    uint32_t accum = 0;
+
+    for (int i = 0; i < digits; i++) {
+      int digit = 0;
+      if (!from_hex(peek_char(), digit)) {
+        error = true;
+        break;
+      }
+      accum = (accum << 4) | digit;
+      cursor++;
+    }
+
+    return error ? 0 : accum;
+  }
+
+  //----------------------------------------
+
+  bool maybe_take_hex(int digits, uint32_t& out) {
+    auto old_error = error;
+    auto old_cursor = cursor;
+    auto new_out = take_hex(digits);
+    if (error) {
+      error = old_error;
+      cursor = old_cursor;
+      return false;
+    }
+    else {
+      out = new_out;
+      return true;
+    }
+  }
+
+  //----------------------------------------
+  // FIXME - do we _ever_ see negative numbers in the packets?
+
+  int take_hex_signed() {
+    int sign = match('-') ? -1 : 1;
+    return take_hex() * sign;
+  }
+
+  //----------------------------------------
+
+  bool take_blob(void* blob, int size) {
+    auto old_cursor = cursor;
+    uint8_t* dst = (uint8_t*)blob;
+
+    for (int i = 0; i < size; i++) {
+      int lo = 0, hi = 0;
+      if ((cursor <= size - 2) &&
+          from_hex(buf[cursor + 0], hi) &&
+          from_hex(buf[cursor + 1], lo)) {
+        *dst++ = (hi << 4) | lo;
+        cursor += 2;
+      }
+      else {
+        error = true;
+        break;
+      }
+    }
+
+    if (error) cursor = old_cursor;
+    return !error;
   }
 
   //----------------------------------------
@@ -141,12 +235,10 @@ struct GDBPacket {
 
   void start_packet() {
     clear();
-    //checksum = 0;
   }
 
   void put_buf(char c) {
     buf[cursor++] = c;
-    //checksum += c;
     size++;
   }
 
@@ -166,6 +258,13 @@ struct GDBPacket {
     put_buf(to_hex((x >> 0) & 0xF));
   }
 
+  void put_blob(void* blob, int size) {
+    uint8_t* src = (uint8_t*)blob;
+    for (int i = 0; i < size; i++) {
+      put_u8(src[i]);
+    }
+  }
+
   void end_packet() {
     packet_valid = true;
   }
@@ -176,7 +275,6 @@ struct GDBPacket {
   char   buf[32768/4];
   int    sentinel2 = 0xF00DCAFE;
   int    size = 0;
-  //char   checksum = 0;
   bool   error = false;
   int    cursor = 0;
   bool   packet_valid = false;
