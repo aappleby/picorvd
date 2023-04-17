@@ -4,10 +4,10 @@
 //------------------------------------------------------------------------------
 // WCH-specific debug interface config registers
 
-const uint8_t DM_CPBR         = 0x7C;
-const uint8_t DM_CFGR         = 0x7D;
-const uint8_t DM_SHDWCFGR     = 0x7E;
-const uint8_t DM_PART         = 0x7F; // not in doc but appears to be part info
+const uint8_t WCH_DM_CPBR     = 0x7C;
+const uint8_t WCH_DM_CFGR     = 0x7D;
+const uint8_t WCH_DM_SHDWCFGR = 0x7E;
+const uint8_t WCH_DM_PART     = 0x7F; // not in doc but appears to be part info
 
 //------------------------------------------------------------------------------
 
@@ -335,8 +335,10 @@ struct Csr_DCSR {
 
   void dump() {
     printf("Reg_DCSR        = 0x%08x\n", raw);
-    printf("  PRV:%d  STEP:%d  NMIP:%d  MPRVEN:%d  CAUSE:%d  STOPTIME:%d  STEPIE:%d  EBREAKU:%d  EBREAKS:%d  EBREAKM:%d  XDEBUGVER:%d\n",
-      PRV, STEP, NMIP, MPRVEN, CAUSE, STOPTIME, STEPIE, EBREAKU, EBREAKS, EBREAKM, XDEBUGVER);
+    printf("  PRV:%d  STEP:%d  NMIP:%d  MPRVEN:%d  CAUSE:%d  STOPTIME:%d  STOPCOUNT:%d\n",
+              PRV,    STEP,    NMIP,    MPRVEN,    CAUSE,    STOPTIME,    STOPCOUNT);
+    printf("  STEPIE:%d  EBREAKU:%d  EBREAKS:%d  EBREAKM:%d  XDEBUGVER:%d\n",
+              STEPIE,    EBREAKU,    EBREAKS,    EBREAKM,    XDEBUGVER);
   }
 };
 static_assert(sizeof(Csr_DCSR) == 4);

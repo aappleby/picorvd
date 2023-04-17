@@ -14,7 +14,10 @@ void vprint_to(putter p, const char* fmt, va_list args);
 void print_to(putter p, const char* fmt, ...);
 char* atox(char* cursor, int& out);
 
-#define CHECK(A) if(!(A)) { printf("ASSERT FAIL %s %d\n", __FILE__, __LINE__); while(1); }
+//#define CHECK(A, args...) if(!(A)) { printf("ASSERT FAIL %s %d\n", __FILE__, __LINE__); printf("" args); printf("\n"); while(1); }
+
+#define CHECK(A, args...)
+
 #define CHECK_EQ(A, B) { \
   auto _a = (A); \
   auto _b = (B); \
@@ -24,20 +27,42 @@ char* atox(char* cursor, int& out);
   } \
 }
 
+template<typename T>
+void set_bit(T* base, int i, bool b) {
+  int block = i / (sizeof(T) * 8);
+  int index = i % (sizeof(T) * 8);
+  base[block] &= ~(1 << index);
+  base[block] |=  (b << index);
+}
+
+template<typename T>
+bool get_bit(T* base, int i) {
+  int block = i / (sizeof(T) * 8);
+  int index = i % (sizeof(T) * 8);
+  return (base[block] >> index) & 1;
+}
+
+
 
 template<typename R, typename E>
 struct Result {
 
   Result(E e) {
-    err = true;
-    r = R();
-    e = e;
+    //printf("result error\n");
+    this->err = true;
+    this->r = R();
+    this->e = e;
   }
 
   Result(R r) {
-    err = false;
-    r = r;
-    e = E();
+    //printf("result ok %d\n", r);
+    this->err = false;
+    this->r = r;
+    this->e = E();
+  }
+
+  R ok_or(R default_val) {
+    return err ? default_val : r;
   }
 
   bool is_ok()  const { return !err; }

@@ -1,7 +1,7 @@
 #pragma once
 #include "utils.h"
 #include "SLDebugger.h"
-#include "GDBPacket.h"
+#include "Packet.h"
 
 //------------------------------------------------------------------------------
 
@@ -11,7 +11,7 @@ public:
   GDBServer();
   void init(SLDebugger* sl);
 
-  void update(bool connected, char byte_in, bool byte_ie, char& byte_out, bool& byte_oe);
+  void update(bool byte_ie, char byte_in, char& byte_out, bool& byte_oe);
 
 //private:
 
@@ -24,6 +24,9 @@ public:
 
   static const handler handler_tab[];
   static const int handler_count;
+
+  void on_connect()    { connected = true; }
+  void on_disconnect() { connected = false; }
 
   void handle_questionmark();
   void handle_bang();
@@ -44,30 +47,35 @@ public:
   void handle_R();
   void handle_s();
   void handle_v();
-  void handle_z();
-  void handle_Z();
+  void handle_z0();
+  void handle_Z0();
+  void handle_z1();
+  void handle_Z1();
 
 //private:
 
   void handle_packet();
+  void on_hit_breakpoint();
 
   void flash_erase(int addr, int size);
   void put_flash_cache(int addr, uint8_t data);
   void flush_flash_cache();
 
-  SLDebugger* sl;
-  GDBPacket   send;
-  GDBPacket   recv;
+  bool connected = false;
 
-  int flash_cursor;
-  uint64_t flash_write_bitmap;
+  SLDebugger* sl = nullptr;
+  OneWire*    wire = nullptr;
+
+  Packet   send;
+  Packet   recv;
 
   uint8_t  page_cache[64];
   int      page_base = -1;
   uint64_t page_bitmap = 0;
 
   enum {
-    RECV_PREFIX,
+    INIT,
+    IDLE,
     RECV_PACKET,
     RECV_PACKET_ESCAPE,
     RECV_SUFFIX1,
@@ -83,7 +91,7 @@ public:
     RECV_ACK,
   };
 
-  int state = RECV_PREFIX;
+  int state = INIT;
   char expected_checksum = 0;
   uint8_t checksum = 0;
 };

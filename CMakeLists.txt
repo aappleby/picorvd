@@ -4,7 +4,7 @@ include(pico_sdk_import.cmake)
 project(test_project C CXX ASM)
 
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 
 pico_sdk_init()
 add_executable(
@@ -14,7 +14,10 @@ add_executable(
   SLDebugger.cpp
   GDBServer.cpp
   utils.cpp
-  GDBPacket.cpp
+  Packet.cpp
+  Console.cpp
+  usb_config.cpp
+  OneWire.cpp
 )
 
 pico_generate_pio_header(test ${CMAKE_CURRENT_SOURCE_DIR}/singlewire.pio)

@@ -30,6 +30,7 @@ GDBServer::GDBServer() {
 
 void GDBServer::init(SLDebugger* sl) {
   this->sl = sl;
+  this->wire = &sl->wire;
 }
 
 //------------------------------------------------------------------------------
@@ -68,8 +69,10 @@ const GDBServer::handler GDBServer::handler_tab[] = {
   { "s",     &GDBServer::handle_s },
   { "R",     &GDBServer::handle_R },
   { "v",     &GDBServer::handle_v },
-  { "z",     &GDBServer::handle_z },
-  { "Z",     &GDBServer::handle_Z },
+  { "z0",    &GDBServer::handle_z0 },
+  { "Z0",    &GDBServer::handle_Z0 },
+  { "z1",    &GDBServer::handle_z1 },
+  { "Z1",    &GDBServer::handle_Z1 },
 };
 
 const int GDBServer::handler_count = sizeof(GDBServer::handler_tab) / sizeof(GDBServer::handler_tab[0]);
@@ -80,7 +83,7 @@ const int GDBServer::handler_count = sizeof(GDBServer::handler_tab) / sizeof(GDB
 void GDBServer::handle_questionmark() {
   //  SIGINT = 2
   recv.take('?');
-  send.set_packet("T02");
+  send.set_packet("T05");
 }
 
 //------------------------------------------------------------------------------
@@ -96,20 +99,19 @@ void GDBServer::handle_bang() {
 
 void GDBServer::handle_c() {
   recv.take('c');
+
+  // Set PC if requested
   uint32_t addr = 0;
-  if (recv.cursor == recv.size) {
-    // No arg, just continue.
-    sl->unhalt();
-    send.set_packet("OK");
+  if (recv.maybe_take_hex(addr)) {
+    wire->set_csr(CSR_DPC, addr);
   }
-  else if (recv.maybe_take_hex(addr)) {
-    sl->set_csr(CSR_DPC, addr);
-    sl->unhalt();
-    send.set_packet("OK");
-  }
-  else {
-    // Bad command
-    send.set_packet("E00");
+
+  // If we did not actually resume because we immediately hit a breakpoint,
+  // respond with a "hit breakpoint" message. Otherwise we do not reply until
+  // the hart stops.
+
+  if (!sl->resume2()) {
+    send.set_packet("T05");
   }
 }
 
@@ -117,6 +119,7 @@ void GDBServer::handle_c() {
 
 void GDBServer::handle_D() {
   recv.take('D');
+  printf("GDB detaching\n");
   send.set_packet("OK");
 }
 
@@ -129,9 +132,9 @@ void GDBServer::handle_g() {
   if (!recv.error) {
     send.start_packet();
     for (int i = 0; i < 16; i++) {
-      send.put_u32(sl->get_gpr(i));
+      send.put_hex_u32(wire->get_gpr(i));
     }
-    send.put_u32(sl->get_csr(CSR_DPC));
+    send.put_hex_u32(wire->get_csr(CSR_DPC));
     send.end_packet();
   }
 }
@@ -143,9 +146,9 @@ void GDBServer::handle_G() {
   recv.take('G');
 
   for(int i = 0; i < 16; i++) {
-    sl->set_gpr(i, recv.take_hex(8));
+    wire->set_gpr(i, recv.take_hex(8));
   }
-  sl->set_csr(CSR_DPC, recv.take_hex(8));
+  wire->set_csr(CSR_DPC, recv.take_hex(8));
 
   send.set_packet(recv.error ? "E01" : "OK");
 }
@@ -157,7 +160,6 @@ void GDBServer::handle_H() {
   recv.take('H');
   recv.skip(1);
   int thread_id = recv.take_hex_signed(); // FIXME do we really need signed here?
-
   send.set_packet(recv.error ? "E01" : "OK");
 }
 
@@ -191,14 +193,14 @@ void GDBServer::handle_m() {
     if ((src & 3) == 0 && len >= 4) {
       int chunk = len & ~3;
       if (chunk > sizeof(buf)) chunk = sizeof(buf);
-      sl->get_block_aligned(src, buf, chunk);
-      send.put_blob(buf, chunk);
+      wire->get_block_aligned(src, buf, chunk);
+      send.put_hex_blob(buf, chunk);
       src += chunk;
       len -= chunk;
     }
     else {
-      auto x = sl->get_mem_u8(src);
-      send.put_u8(x >> 0);
+      auto x = wire->get_mem_u8(src);
+      send.put_hex_u8(x >> 0);
       src += 1;
       len -= 1;
     }
@@ -232,13 +234,13 @@ void GDBServer::handle_M() {
       int chunk = len & ~3;
       if (chunk > sizeof(buf)) chunk = sizeof(buf);
       recv.take_blob(buf, chunk);
-      sl->set_block_aligned(dst, buf, chunk);
+      wire->set_block_aligned(dst, buf, chunk);
       dst += chunk;
       len -= chunk;
     }
     else {
       uint8_t x = (uint8_t)recv.take_hex(2);
-      sl->set_mem_u8(dst, x);
+      wire->set_mem_u8(dst, x);
       dst += 1;
       len -= 1;
     }
@@ -257,10 +259,10 @@ void GDBServer::handle_p() {
   if (!recv.error) {
     send.start_packet();
     if (gpr == 16) {
-      send.put_u32(sl->get_csr(CSR_DPC));
+      send.put_hex_u32(wire->get_csr(CSR_DPC));
     }
     else {
-      send.put_u32(sl->get_gpr(gpr));
+      send.put_hex_u32(wire->get_gpr(gpr));
     }
     send.end_packet();
   }
@@ -277,10 +279,10 @@ void GDBServer::handle_P() {
 
   if (!recv.error) {
     if (gpr == 16) {
-      sl->set_csr(CSR_DPC, val);
+      wire->set_csr(CSR_DPC, val);
     }
     else {
-      sl->set_gpr(gpr, val);
+      wire->set_gpr(gpr, val);
     }
     send.set_packet("OK");
   }
@@ -288,8 +290,14 @@ void GDBServer::handle_P() {
 
 //------------------------------------------------------------------------------
 
+// > $qRcmd,72657365742030#fc+
+
 void GDBServer::handle_q() {
-  if (recv.match("qAttached")) {
+  //printf("\n");
+  //printf("GDBServer::handle_q()\n");
+  //printf("%s\n", recv.cursor2);
+
+  if (recv.match_prefix("qAttached")) {
     // Query what GDB is attached to
     // Reply:
     // ‘1’ The remote server attached to an existing process.
@@ -297,27 +305,29 @@ void GDBServer::handle_q() {
     // ‘E NN’ A badly formed request or an error was encountered.
     send.set_packet("1");
   }
-  else if (recv.match("qC")) {
+  else if (recv.match_prefix("qC")) {
     // -> qC
     // Return current thread ID
     // Reply: ‘QC<thread-id>’
-    send.set_packet("QC0");
+    // can't be -1 or 0, those are special
+    send.set_packet("QC1");
   }
-  else if (recv.match("qfThreadInfo")) {
+  else if (recv.match_prefix("qfThreadInfo")) {
     // Query all active thread IDs
-    send.set_packet("m0");
+    // can't be -1 or 0, those are special
+    send.set_packet("m1");
   }
-  else if (recv.match("qsThreadInfo")) {
+  else if (recv.match_prefix("qsThreadInfo")) {
     // Query all active thread IDs, continued
     send.set_packet("l");
   }
-  else if (recv.match("qSupported")) {
+  else if (recv.match_prefix("qSupported")) {
     // FIXME we're ignoring the contents of qSupported
-    recv.cursor = recv.size;
+    recv.cursor2 = recv.buf + recv.size;
     send.set_packet("PacketSize=32768;qXfer:memory-map:read+");
   }
-  else if (recv.match("qXfer:")) {
-    if (recv.match("memory-map:read::")) {
+  else if (recv.match_prefix("qXfer:")) {
+    if (recv.match_prefix("memory-map:read::")) {
       int offset = recv.take_hex();
       recv.take(',');
       int length = recv.take_hex();
@@ -335,9 +345,20 @@ void GDBServer::handle_q() {
 
     // FIXME handle other xfer packets
   }
-  else {
-    // Unknown query, ignore it
-    recv.cursor = recv.size;
+  else if (recv.match_prefix("qRcmd,")) {
+    // Monitor command
+
+    // reset in hex
+    if (recv.match_prefix_hex("reset")) { 
+      sl->reset_cpu_and_halt();
+      send.set_packet("OK");
+    }
+  }
+
+
+  // If we didn't send anything, ignore the command.
+  if (send.empty()) {
+    recv.cursor2 = recv.buf + recv.size;
     send.set_packet("");
   }
 }
@@ -355,36 +376,8 @@ void GDBServer::handle_R() {
 
 void GDBServer::handle_s() {
   recv.take('s');
-
-  // Copied from the datasheet
-
-  // Write the DCSR register value to be written to the Data0
-  // register, here set dcsr.breakm=1, dcsr.stepie=0,
-  // dcsr.step=1, dcsr.prv=3 to enable the machine mode to
-  // execute ebreak into debug, single step under the interrupt
-  // is prohibited, set single step execution.
-
-  /*
-  PRV = 3 (machine)
-  STEP = 1
-  EBREAKM = 1
-  */
-  sl->set_dbg(DM_DATA0, 0x00008007);
-
-  // Copy the data in Data0 to DCSR register
-  /*
-  REGNO = 0x07B0
-  WRITE = 1
-  TRANSFER = 1
-  AARSIZE = 2
-  */
-  sl->set_dbg(DM_COMMAND, 0x002307b0);
-
-  // (resume cpu)
-
-  // DCSR = 0x00000003 (PRV = 3, no step, no ebreakm)
-
-  send.set_packet("");
+  sl->step();
+  send.set_packet("T05");
 }
 
 //------------------------------------------------------------------------------
@@ -397,21 +390,21 @@ void GDBServer::handle_v() {
   }
   else
 #endif
-  if (recv.match("vFlash")) {
-    if (recv.match("Write")) {
+  if (recv.match_prefix("vFlash")) {
+    if (recv.match_prefix("Write")) {
       recv.take(':');
       int addr = recv.take_hex();
       recv.take(":");
-      while(recv.cursor < recv.size) {
+      while((recv.cursor2 - recv.buf) < recv.size) {
         put_flash_cache(addr++, recv.take_char());
       }
       send.set_packet("OK");
     }
-    else if (recv.match("Done")) {
+    else if (recv.match_prefix("Done")) {
       flush_flash_cache();
       send.set_packet("OK");
     }
-    else if (recv.match("Erase")) {
+    else if (recv.match_prefix("Erase")) {
       recv.take(':');
       int addr = recv.take_hex();
       recv.take(',');
@@ -426,31 +419,71 @@ void GDBServer::handle_v() {
 
     }
   }
-  else if (recv.match("vKill")) {
+  else if (recv.match_prefix("vKill")) {
     // FIXME should reset cpu or something?
-    recv.cursor = recv.size;
+    recv.cursor2 = recv.buf + recv.size;
     sl->reset_cpu_and_halt();
     send.set_packet("OK");
   }
-  else if (recv.match("vMustReplyEmpty")) {
+  else if (recv.match_prefix("vMustReplyEmpty")) {
     send.set_packet("");
   }
   else {
-    recv.cursor = recv.size;
+    recv.cursor2 = recv.buf + recv.size;
     send.set_packet("");
   }
 }
 
 //------------------------------------------------------------------------------
 
-void GDBServer::handle_z() {
-  recv.cursor = recv.size;
-  send.set_packet("");
+void GDBServer::handle_z0() {
+  recv.take("z0,");
+  uint32_t addr = recv.take_hex();
+  recv.take(',');
+  uint32_t kind = recv.take_hex();
+
+  //printf("GDBServer::handle_z0 0x%08x 0x%08x\n", addr, kind);
+  sl->clear_breakpoint(addr, kind);
+
+  send.set_packet("OK");
 }
 
-void GDBServer::handle_Z() {
-  recv.cursor = recv.size;
-  send.set_packet("");
+void GDBServer::handle_Z0() {
+  recv.take("Z0,");
+  uint32_t addr = recv.take_hex();
+  recv.take(',');
+  uint32_t kind = recv.take_hex();
+
+  //printf("GDBServer::handle_Z0 0x%08x 0x%08x\n", addr, kind);
+  sl->set_breakpoint(addr, kind);
+
+  send.set_packet("OK");
+}
+
+//------------------------------------------------------------------------------
+
+void GDBServer::handle_z1() {
+  recv.take("z1,");
+  uint32_t addr = recv.take_hex();
+  recv.take(',');
+  uint32_t kind = recv.take_hex();
+
+  //printf("GDBServer::handle_z1 0x%08x 0x%08x\n", addr, kind);
+  sl->clear_breakpoint(addr, kind);
+
+  send.set_packet("OK");
+}
+
+void GDBServer::handle_Z1() {
+  recv.take("Z1,");
+  uint32_t addr = recv.take_hex();
+  recv.take(',');
+  uint32_t kind = recv.take_hex();
+
+  //printf("GDBServer::handle_Z1 0x%08x 0x%08x\n", addr, kind);
+  sl->set_breakpoint(addr, kind);
+
+  send.set_packet("OK");
 }
 
 //------------------------------------------------------------------------------
@@ -546,7 +579,7 @@ void GDBServer::handle_packet() {
   }
 
   if (h) {
-    recv.cursor = 0;
+    recv.cursor2 = recv.buf;
     send.clear();
     (*this.*h)();
 
@@ -554,8 +587,8 @@ void GDBServer::handle_packet() {
       printf("\nParse failure for packet!\n");
       send.set_packet("E00");
     }
-    else if (recv.cursor != recv.size) {
-      printf("\nLeftover text in packet - \"%s\"\n", &recv.buf[recv.cursor]);
+    else if ((recv.cursor2 - recv.buf) != recv.size) {
+      printf("\nLeftover text in packet - \"%s\"\n", recv.cursor2);
     }
   }
   else {
@@ -564,23 +597,37 @@ void GDBServer::handle_packet() {
   }
 
   if (!send.packet_valid) {
-    printf("\nHandler created a bad packet '%s'\n", send.buf);
-    send.set_packet("");
+    printf("\nNot responding to command {%s}\n", recv.buf);
   }
 }
 
 //------------------------------------------------------------------------------
 
-void GDBServer::update(bool connected, char byte_in, bool byte_ie, char& byte_out, bool& byte_oe) {
+void GDBServer::on_hit_breakpoint() {
+  printf("Breaking\n");
+  send.set_packet("T05");
+  state = SEND_PREFIX;
+}
+
+//------------------------------------------------------------------------------
+
+void GDBServer::update(bool byte_ie, char byte_in, char& byte_out, bool& byte_oe) {
+  auto next_state = state;
+
   byte_out = 0;
   byte_oe = 0;
 
   switch(state) {
-    case RECV_PREFIX: {
+    case INIT: {
+      next_state = IDLE;
+      break;
+    }
+
+    case IDLE: {
       if (byte_ie) {
         // Wait for start char
         if (byte_in == '$') {
-          state = RECV_PACKET;
+          next_state = RECV_PACKET;
           recv.clear();
           checksum = 0;
         }
@@ -590,7 +637,7 @@ void GDBServer::update(bool connected, char byte_in, bool byte_ie, char& byte_ou
           printf("Breaking\n");
           sl->halt();
           send.set_packet("T05");
-          state = SEND_PREFIX;
+          next_state = SEND_PREFIX;
         }
       }
       break;
@@ -602,15 +649,15 @@ void GDBServer::update(bool connected, char byte_in, bool byte_ie, char& byte_ou
         // Checksum is for the _escaped_ data.
         if (byte_in == '#') {
           expected_checksum = 0;
-          state = RECV_SUFFIX1;
+          next_state = RECV_SUFFIX1;
         }
         else if (byte_in == '}') {
           checksum += byte_in;
-          state = RECV_PACKET_ESCAPE;
+          next_state = RECV_PACKET_ESCAPE;
         }
         else {
           checksum += byte_in;
-          recv.put_buf(byte_in);
+          recv.put(byte_in);
         }
       }
       break;
@@ -619,8 +666,8 @@ void GDBServer::update(bool connected, char byte_in, bool byte_ie, char& byte_ou
     case RECV_PACKET_ESCAPE: {
       if (byte_ie) {
         checksum += byte_in;
-        recv.put_buf(byte_in ^ 0x20);
-        state = RECV_PACKET;
+        recv.put(byte_in ^ 0x20);
+        next_state = RECV_PACKET;
       }
       break;
     }
@@ -628,7 +675,7 @@ void GDBServer::update(bool connected, char byte_in, bool byte_ie, char& byte_ou
     case RECV_SUFFIX1: {
       if (byte_ie) {
         expected_checksum = (expected_checksum << 4) | from_hex(byte_in);
-        state = RECV_SUFFIX2;
+        next_state = RECV_SUFFIX2;
       }
       break;
     }
@@ -644,89 +691,90 @@ void GDBServer::update(bool connected, char byte_in, bool byte_ie, char& byte_ou
           printf("actual checksum   0x%02x\n", checksum);
           byte_out = '-';
           byte_oe = true;
-          state = RECV_PREFIX;
+          next_state = IDLE;
         }
         else {
           // Packet checksum OK, handle it.
           byte_out = '+';
           byte_oe = true;
+          printf("\n"); // REMOVE THIS LATER
           handle_packet();
-          state = SEND_PREFIX;
+          next_state = send.packet_valid ? SEND_PREFIX : IDLE;
         }
       }
       break;
     }
 
     case SEND_PREFIX: {
-      printf("\n<< ");
+      //printf("\n<< ");
       byte_out = '$';
       byte_oe = true;
       checksum = 0;
-      state = send.size ? SEND_PACKET : SEND_SUFFIX1;
-      send.cursor = 0;
+      next_state = send.size ? SEND_PACKET : SEND_SUFFIX1;
+      send.cursor2 = send.buf;
       break;
     }
 
     case SEND_PACKET: {
-      char c = send.buf[send.cursor];
+      char c = *send.cursor2;
       if (c == '#' || c == '$' || c == '}' || c == '*') {
         checksum += '}';
         byte_out = '}';
         byte_oe = true;
-        state = SEND_PACKET_ESCAPE;
+        next_state = SEND_PACKET_ESCAPE;
         break;
       }
       else {
         checksum += c;
         byte_out = c;
         byte_oe = true;
-        send.cursor++;
-        if (send.cursor == send.size) {
-          state = SEND_SUFFIX1;
+        send.cursor2++;
+        if ((send.cursor2 - send.buf) == send.size) {
+          next_state = SEND_SUFFIX1;
         }
         break;
       }
     }
 
     case SEND_PACKET_ESCAPE: {
-      char c = send.buf[send.cursor];
+      char c = *send.cursor2;
       checksum += c ^ 0x20;
       byte_out = c ^ 0x20;
       byte_oe = true;
-      state = SEND_PACKET;
+      next_state = SEND_PACKET;
       break;
     }
 
     case SEND_SUFFIX1:
       byte_out = '#';
       byte_oe = true;
-      state = SEND_SUFFIX2;
+      next_state = SEND_SUFFIX2;
       break;
 
     case SEND_SUFFIX2:
       byte_out = to_hex((checksum >> 4) & 0xF);
       byte_oe = true;
-      state = SEND_SUFFIX3;
+      next_state = SEND_SUFFIX3;
       break;
 
     case SEND_SUFFIX3:
       byte_out = to_hex((checksum >> 0) & 0xF);
       byte_oe = true;
-      state = RECV_ACK;
+      next_state = RECV_ACK;
       break;
 
 
     case RECV_ACK: {
       if (byte_ie) {
         if (byte_in == '+') {
-          printf("\n>> ");
-          state = RECV_PREFIX;
+          //printf("\n>> ");
+          next_state = IDLE;
         }
         else if (byte_in == '-') {
           printf("========================\n");
           printf("========  NACK  ========\n");
           printf("========================\n");
-          state = SEND_PACKET;
+          next_state = SEND_PACKET;
         }
         else {
           printf("garbage ack char %d '%c'\n", byte_in, byte_in);
@@ -735,6 +783,24 @@ void GDBServer::update(bool connected, char byte_in, bool byte_ie, char& byte_ou
       break;
     }
   }
+
+#if 1
+  if (byte_ie) printf(isprint(byte_in)  ? "%c" : "{%02x}", byte_in);
+  if (byte_oe) printf(isprint(byte_out) ? "%c" : "{%02x}", byte_out);
+
+  if (state != IDLE && next_state == IDLE) {
+    printf("\nCommand count %d", wire->cmd_count);
+    wire->cmd_count = 0;
+    printf("\n>> ");
+  }
+
+  if (state != SEND_PREFIX && next_state == SEND_PREFIX) {
+    printf("\n<<   ");
+  }
+#endif
+
+  state = next_state;
+
 }
 
 //------------------------------------------------------------------------------
