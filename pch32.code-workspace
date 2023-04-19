@@ -11,7 +11,8 @@
       "cdc_device.h": "c",
       "tusb_common.h": "c",
       "tusb_option.h": "c",
-      "tusb_config.h": "c"
+      "tusb_config.h": "c",
+      "pio.h": "c"
     }
   }
 }

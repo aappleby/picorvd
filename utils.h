@@ -14,16 +14,16 @@ void vprint_to(putter p, const char* fmt, va_list args);
 void print_to(putter p, const char* fmt, ...);
 char* atox(char* cursor, int& out);
 
-//#define CHECK(A, args...) if(!(A)) { printf("ASSERT FAIL %s %d\n", __FILE__, __LINE__); printf("" args); printf("\n"); while(1); }
+#define CHECK(A, args...) if(!(A)) { printf("ASSERT FAIL %s %d\n", __FILE__, __LINE__); printf("" args); printf("\n"); while (1); }
 
-#define CHECK(A, args...)
+//#define CHECK(A, args...)
 
 #define CHECK_EQ(A, B) { \
   auto _a = (A); \
   auto _b = (B); \
   if (_a != _b) { \
     printf("ASSERT FAIL: " #A " != " #B " (0x%08x != 0x%08x) @ %s:%d\n", _a, _b, __FILE__, __LINE__); \
-    while(1); \
+    while (1); \
   } \
 }
 

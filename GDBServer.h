@@ -25,8 +25,8 @@ public:
   static const handler handler_tab[];
   static const int handler_count;
 
-  void on_connect()    { connected = true; }
-  void on_disconnect() { connected = false; }
+  void on_connect();
+  void on_disconnect();
 
   void handle_questionmark();
   void handle_bang();

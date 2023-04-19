@@ -36,11 +36,11 @@ int main() {
   // Init USB
   tud_init(BOARD_TUD_RHPORT);
 
+  printf("\n\n\n");
+  printf("================================================================================\n");
   printf("PicoDebug 0.0.2\n");
 
-  sl.wire.init_pio(SWD_PIN);
-  sl.reset_dbg();
-  sl.wire.reset_dbg();
+  sl.reset_dbg(SWD_PIN);
 
   printf("<starting gdb server>\n");
   server.init(&sl);
@@ -54,6 +54,8 @@ int main() {
 
   bool old_connected = false;
 
+  uint32_t last_halt_check = time_us_32();
+
   while (1) {
     //----------------------------------------
     // Update TinyUSB
@@ -66,21 +68,21 @@ int main() {
     bool new_connected = tud_cdc_n_connected(0);
 
     if (!old_connected && new_connected) {
-      //printf("GDB connected\n");
+      printf("GDB connected\n");
       sl.attach();
-      sl.halt();
       server.on_connect();
     }
     
     if (old_connected && !new_connected) {
-      //printf("GDB disconnected\n");
+      printf("GDB disconnected\n");
       server.on_disconnect();
       sl.detach();
     }
 
-    if (sl.attached) {
-      if (!sl.halted) {
-        if (sl.wire.halted()) {
+    if (!sl.is_halted()) {
+      uint32_t now = time_us_32();
+      if ((now - last_halt_check) > 100000) {
+        if (sl.hit_breakpoint()) {
           //printf("\nCore halted due to breakpoint @ 0x%08x\n", sl.get_csr(CSR_DPC));
           sl.async_halted();
           if (server.connected) {
@@ -88,6 +90,7 @@ int main() {
             server.state = GDBServer::SEND_PREFIX;
           }
         }
+        last_halt_check = now;
       }
     }
 

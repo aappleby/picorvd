@@ -2,41 +2,63 @@
 #include "utils.h"
 #include "WCH_Regs.h"
 #include "build/singlewire.pio.h"
+#include "string.h"
+
+#define DUMP_COMMANDS
+
+#if 0
+  // If we attach while running, resume.
+  //if (!halted) {
+  //  wire.resume();
+  //}
 
   /*
-  auto acs = Reg_ABSTRACTCS(sl->get_dbg(DM_ABSTRACTCS));
-  if (acs.BUSY) {
-    printf("BUSY   = %d\n", acs.BUSY);
+  if (halted) {
+    const char* halt_cause[] = {
+      "<not halted>",
+      "ebreak",
+      "trigger",
+      "halt request",
+      "step",
+      "halt on reset",
+      "<invalid6>",
+      "<invalid7>",
+    };
+    printf("SLDebugger::attach() - CPU is halted, cause = %s\n", halt_cause[dcsr_on_attach.CAUSE]);
   }
-  if (acs.CMDER) {
-    printf("CMDERR = %d\n", acs.CMDER);
-    sl->clear_err();
+  else {
+    printf("SLDebugger::attach() - CPU is running\n");
   }
   */
-
+#endif
 
 void busy_wait(int count) {
   volatile int c = count;
-  while(c) c = c - 1;
+  while (c) c = c - 1;
 }
 
 //------------------------------------------------------------------------------
 
-void OneWire::init_pio(int swd_pin) {
+void OneWire::reset_dbg(int swd_pin) {
+  CHECK(swd_pin != -1);
   this->swd_pin = swd_pin;
 
-  //gpio_set_drive_strength(swd_pin, GPIO_DRIVE_STRENGTH_12MA);
-  //gpio_set_slew_rate     (swd_pin, GPIO_SLEW_RATE_FAST);
+  // Configure GPIO
   gpio_set_drive_strength(swd_pin, GPIO_DRIVE_STRENGTH_2MA);
   gpio_set_slew_rate     (swd_pin, GPIO_SLEW_RATE_SLOW);
   gpio_set_function      (swd_pin, GPIO_FUNC_PIO0);
 
-  int sm = 0;
-  pio_clear_instruction_memory(pio0);
-  uint offset = pio_add_program(pio0, &singlewire_program);
+  // Reset PIO module
+  pio0->ctrl = 0b000100010001; 
+  pio_sm_set_enabled(pio0, pio_sm, false);
 
+  // Upload PIO program
+  pio_clear_instruction_memory(pio0);
+  uint pio_offset = pio_add_program(pio0, &singlewire_program);
+
+  // Configure PIO module
   pio_sm_config c = pio_get_default_sm_config();
-  sm_config_set_wrap        (&c, offset + singlewire_wrap_target, offset + singlewire_wrap);
+  sm_config_set_wrap        (&c, pio_offset + singlewire_wrap_target, pio_offset + singlewire_wrap);
   sm_config_set_sideset     (&c, 1, /*optional*/ false, /*pindirs*/ true);
   sm_config_set_out_pins    (&c, swd_pin, 1);
   sm_config_set_in_pins     (&c, swd_pin);
@@ -48,20 +70,9 @@ void OneWire::init_pio(int swd_pin) {
   // 125 mhz / 12 = 96 nanoseconds per tick, close enough to 100 ns.
   sm_config_set_clkdiv      (&c, 12);
 
-  pio_sm_init       (pio0, sm, offset, &c);
-  pio_sm_set_pins   (pio0, sm, 0);
-  pio_sm_set_enabled(pio0, sm, true);
-}
-
-//------------------------------------------------------------------------------
-
-void OneWire::reset_dbg() {
-  CHECK(swd_pin != -1);
-
-  active_prog = nullptr;
-  
-  // Reset pio block
-  pio0->ctrl = 0b000100010001; 
+  pio_sm_init       (pio0, pio_sm, pio_offset, &c);
+  pio_sm_set_pins   (pio0, pio_sm, 0);
+  pio_sm_set_enabled(pio0, pio_sm, true);
 
   // Grab pin and send an 8 usec low pulse to reset debug module
   // If we use the sdk functions to do this we get jitter :/
@@ -72,13 +83,33 @@ void OneWire::reset_dbg() {
   sio_hw->gpio_oe_clr = (1 << swd_pin);
   iobank0_hw->io[swd_pin].ctrl = GPIO_FUNC_PIO0 << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB;
 
-  // Enable debug output pin
+  // Enable debug output pin on target
   set_dbg(WCH_DM_SHDWCFGR, 0x5AA50400);
   set_dbg(WCH_DM_CFGR,     0x5AA50400);
 
-  // Reset debug module
+  // Reset debug module on target
   set_dbg(DM_DMCONTROL, 0x00000000);
   set_dbg(DM_DMCONTROL, 0x00000001);
+
+  // Reset cached state
+  for (int i = 0; i < 8; i++) prog_cache[i] = 0xDEADBEEF;
+  for (int i = 0; i < reg_count; i++) reg_cache[i] = 0xDEADBEEF;
+  dirty_regs = 0;
+  clean_regs = 0;
+  halted = Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHALTED;
+
+  // Halt momentarily if needed so we can enable breakpoints in DCSR
+  bool was_halted = halted;
+  if (!was_halted) halt();
+  auto dcsr = Csr_DCSR(get_csr(CSR_DCSR));
+  dcsr.EBREAKM = 1;
+  dcsr.EBREAKS = 1;
+  dcsr.EBREAKU = 1;
+  dcsr.STEPIE = 0;
+  dcsr.STOPCOUNT = 1;
+  dcsr.STOPTIME = 1;
+  set_csr(CSR_DCSR, dcsr);
+  if (!was_halted) resume();
 }
 
 //------------------------------------------------------------------------------
@@ -116,7 +147,10 @@ uint32_t OneWire::get_dbg(uint8_t addr) {
   cmd_count++;
   pio_sm_put_blocking(pio0, 0, ((~addr) << 1) | 1);
   auto data = pio_sm_get_blocking(pio0, 0);
+#ifdef DUMP_COMMANDS
   printf("get_dbg %15s 0x%08x\n", addr_to_regname(addr), data);
+#endif
+  //for(volatile int i = 0; i < 100000; i++);
   return data;
 }
 
@@ -124,7 +158,9 @@ uint32_t OneWire::get_dbg(uint8_t addr) {
 
 void OneWire::set_dbg(uint8_t addr, uint32_t data) {
   cmd_count++;
+#ifdef DUMP_COMMANDS
   printf("set_dbg %15s 0x%08x\n", addr_to_regname(addr), data);
+#endif
   pio_sm_put_blocking(pio0, 0, ((~addr) << 1) | 0);
   pio_sm_put_blocking(pio0, 0, ~data);
 }
@@ -132,49 +168,87 @@ void OneWire::set_dbg(uint8_t addr, uint32_t data) {
 //------------------------------------------------------------------------------
 
 void OneWire::halt() {
+  printf("OneWire::halt()\n");
   set_dbg(DM_DMCONTROL, 0x80000001);
   while (!Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHALTED);
   set_dbg(DM_DMCONTROL, 0x00000001);
+
+  halted = true;
+
+  printf("OneWire::halt() done\n");
 }
 
 //------------------------------------------------------------------------------
 
 void OneWire::resume() {
+  printf("OneWire::resume()\n");
   set_dbg(DM_DMCONTROL, 0x40000001);
-  while(!Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLRESUMEACK);
+  while (!Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLRESUMEACK);
   set_dbg(DM_DMCONTROL, 0x00000001);
+
+  halted = false;
+  clean_regs = 0;
+
+  printf("OneWire::resume() done\n");
 }
 
 //------------------------------------------------------------------------------
 
 void OneWire::step() {
+  printf("OneWire::step()\n");
+  
   Csr_DCSR dcsr = get_csr(CSR_DCSR);
   dcsr.STEP = 1;
   set_csr(CSR_DCSR, dcsr);
 
-  resume();
-  while(!halted());
+  set_dbg(DM_DMCONTROL, 0x40000001);
+  while (!Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLRESUMEACK); // we might be able to skip this check?
+  while (!Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHALTED);
+  set_dbg(DM_DMCONTROL, 0x00000001);
+
+  halted = true;
+  clean_regs = 0;
 
   dcsr.STEP = 0;
   set_csr(CSR_DCSR, dcsr);
+
+  printf("OneWire::step() done\n");
 }
 
 //------------------------------------------------------------------------------
 
-bool OneWire::halted() {
-  return Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHALTED;
+bool OneWire::is_halted() {
+  return halted;
+}
+
+bool OneWire::hit_breakpoint() {
+  bool new_halted = Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHALTED;
+  if (!halted && new_halted) {
+    halted = true;
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
+bool OneWire::update_halted() {
+  halted = Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHALTED;
+  return halted;
 }
 
 //------------------------------------------------------------------------------
 
-void OneWire::reset_cpu_and_halt() {
+void OneWire::reset_cpu() {
+  printf("reset_cpu()");
+
   // Halt and leave halt request set
   set_dbg(DM_DMCONTROL, 0x80000001);
   while (!Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHALTED);
 
   // Set reset request
   set_dbg(DM_DMCONTROL, 0x80000003);
-  while(!Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHAVERESET);
+  while (!Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHAVERESET);
 
   // Clear reset request and hold halt request
   set_dbg(DM_DMCONTROL, 0x80000001);
@@ -183,20 +257,52 @@ void OneWire::reset_cpu_and_halt() {
 
   // Clear HAVERESET
   set_dbg(DM_DMCONTROL, 0x90000001);
-  while(Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHAVERESET);
+  while (Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHAVERESET);
 
   // Clear halt request
   set_dbg(DM_DMCONTROL, 0x00000001);
+
+  // Resetting the CPU also resets DCSR, redo it.
+  auto dcsr = Csr_DCSR(get_csr(CSR_DCSR));
+  dcsr.EBREAKM = 1;
+  dcsr.EBREAKS = 1;
+  dcsr.EBREAKU = 1;
+  dcsr.STEPIE = 0;
+  dcsr.STOPCOUNT = 1;
+  dcsr.STOPTIME = 1;
+  set_csr(CSR_DCSR, dcsr);
+
+  // Reset cached state
+  for (int i = 0; i < reg_count; i++) reg_cache[i] = 0xDEADBEEF;
+  dirty_regs = 0;
+  clean_regs = 0;
+  halted = true;
 }
 
 //------------------------------------------------------------------------------
 
-void OneWire::load_prog(uint32_t* prog) {
-  if (active_prog != prog) {
-    for (int i = 0; i < 8; i++) {
-      set_dbg(0x20 + i, prog[i]);
+void OneWire::load_prog(const char* name, uint32_t* prog, uint32_t dirty_regs) {
+  printf("load_prog %s 0x%08x\n", name, dirty_regs);
+
+  for (int i = 0; i < reg_count; i++) {
+    if (dirty_regs & (1 << i)) {
+      if (clean_regs & (1 << i)) {
+        // already got a clean copy
+      }
+      else {
+        reg_cache[i] = get_gpr(i);
+        clean_regs |= (1 << i);
+      }
     }
-    active_prog = prog;
+  }
+
+  this->dirty_regs |= dirty_regs;
+
+  for (int i = 0; i < 8; i++) {
+    if (prog_cache[i] != prog[i]) {
+      set_dbg(0x20 + i, prog[i]);
+      prog_cache[i] = prog[i];
+    }
   }
 }
 
@@ -221,8 +327,6 @@ void OneWire::set_data1(uint32_t d) {
 //------------------------------------------------------------------------------
 
 uint32_t OneWire::get_gpr(int index) {
-  CHECK(halted && sanity());
-
   Reg_COMMAND cmd;
   cmd.REGNO      = 0x1000 | index;
   cmd.WRITE      = 0;
@@ -233,19 +337,13 @@ uint32_t OneWire::get_gpr(int index) {
   cmd.CMDTYPE    = 0;
 
   set_dbg(DM_COMMAND, cmd);
-  // pretty sure we don't need this
-  //while(Reg_ABSTRACTCS(get_dbg(DM_ABSTRACTCS)).BUSY);
   auto result = get_dbg(DM_DATA0);
-
-  CHECK(halted && sanity());
   return result;
 }
 
 //------------------------------------------------------------------------------
 
 void OneWire::set_gpr(int index, uint32_t gpr) {
-  CHECK(halted && sanity());
-
   if (index == 16) {
     set_csr(CSR_DPC, gpr);
     return;
@@ -262,19 +360,57 @@ void OneWire::set_gpr(int index, uint32_t gpr) {
 
     set_dbg(DM_DATA0,   gpr);
     set_dbg(DM_COMMAND, cmd);
-    // pretty sure we don't need this
-    //while(Reg_ABSTRACTCS(get_dbg(DM_ABSTRACTCS)).BUSY);
+  }
+}
+
+//------------------------------------------------------------------------------
+
+#if 0
+void OneWire::save_regs() {
+  printf("OneWire::save_regs\n");
+  for (int i = 0; i < reg_count; i++) {
+    reg_cache[i] = get_gpr(i);
+  }
+  dirty_regs = 0;
+}
+
+void OneWire::load_regs() {
+  printf("OneWire::load_regs 0x%08x\n", dirty_regs);
+  for (int i = 0; i < reg_count; i++) {
+    uint32_t actual = get_gpr(i);
+
+    bool dirty1 = (actual != reg_cache[i]);
+    bool dirty2 = (dirty_regs & (1 << i));
+
+    if (dirty1 != dirty2) {
+      printf("Dirty flags for GPR %02d invalid - dirty1 %d dirty2 %d\n", i, dirty1, dirty2);
+      CHECK(false);
+    }
+
+    set_gpr(i, reg_cache[i]);
+  }
+  dirty_regs = 0;
+}
+#endif
+
+void OneWire::reload_regs() {
+  for (int i = 0; i < reg_count; i++) {
+    if (dirty_regs & (1 << i)) {
+      if (clean_regs & (1 << i)) {
+        set_gpr(i, reg_cache[i]);
+      }
+      else {
+        CHECK(false, "GPR %d is dirity and we dont' have a saved copy!\n", i);
+      }
+    }
   }
 
-  CHECK(halted && sanity());
+  dirty_regs = 0;
 }
 
 //------------------------------------------------------------------------------
 
 uint32_t OneWire::get_csr(int index) {
-  CHECK(sanity());
-  //assert(halted);
-
   Reg_COMMAND cmd;
   cmd.REGNO      = index;
   cmd.WRITE      = 0;
@@ -285,18 +421,13 @@ uint32_t OneWire::get_csr(int index) {
   cmd.CMDTYPE    = 0;
 
   set_dbg(DM_COMMAND, cmd);
-  // pretty sure we don't need this
-  //while(Reg_ABSTRACTCS(get_dbg(DM_ABSTRACTCS)).BUSY);
   auto result = get_dbg(DM_DATA0);
-  CHECK(sanity());
   return result;
 }
 
 //------------------------------------------------------------------------------
 
 void OneWire::set_csr(int index, uint32_t data) {
-  CHECK(sanity());
-
   Reg_COMMAND cmd;
   cmd.REGNO      = index;
   cmd.WRITE      = 1;
@@ -308,19 +439,24 @@ void OneWire::set_csr(int index, uint32_t data) {
 
   set_dbg(DM_DATA0, data);
   set_dbg(DM_COMMAND, cmd);
-  // pretty sure we don't need this
-  //while(Reg_ABSTRACTCS(get_dbg(DM_ABSTRACTCS)).BUSY);
-
-  CHECK(sanity());
 }
 
 //------------------------------------------------------------------------------
 
-void OneWire::run_prog() {
+void OneWire::run_prog_slow() {
   const uint32_t cmd_runprog = 0x00040000;
   set_dbg(DM_COMMAND, cmd_runprog);
   // we definitely need this busywait
-  while(Reg_ABSTRACTCS(get_dbg(DM_ABSTRACTCS)).BUSY);
+  while (Reg_ABSTRACTCS(get_dbg(DM_ABSTRACTCS)).BUSY);
+}
+
+void OneWire::run_prog_fast() {
+  const uint32_t cmd_runprog = 0x00040000;
+  set_dbg(DM_COMMAND, cmd_runprog);
+
+  // It takes 40 usec to do _anything_ over the debug interface, so if the
+  // program is "fast" then we should _never_ see BUSY... right?
+  CHECK(!Reg_ABSTRACTCS(get_dbg(DM_ABSTRACTCS)).BUSY);
 }
 
 //------------------------------------------------------------------------------
@@ -385,79 +521,143 @@ void OneWire::status() {
 
 //------------------------------------------------------------------------------
 
+uint32_t OneWire::get_mem_u32(uint32_t addr) {
+  auto offset  = addr & 3;
+  auto addr_lo = (addr + 0) & ~3;
+  auto addr_hi = (addr + 3) & ~3;
 
-#if 0
-void OneWire::reset_cpu_and_halt() {
-  CHECK(attached);
-  CHECK(sanity());
+  auto data_lo = get_mem_u32_aligned(addr_lo);
 
-  // Halt and leave halt request set
-  set_dbg(DM_DMCONTROL, 0x80000001);
-  while (!Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHALTED);
-  halted = true;
+  if (offset == 0) return data_lo;
 
-  // Set reset request
-  set_dbg(DM_DMCONTROL, 0x80000003);
-  while(!Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHAVERESET);
-
-  // Clear reset request and hold halt request
-  set_dbg(DM_DMCONTROL, 0x80000001);
-  // this busywait seems to be required or we hang
-  while (!Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHALTED); 
-
-  // Clear HAVERESET
-  set_dbg(DM_DMCONTROL, 0x90000001);
-  while(Reg_DMSTATUS(get_dbg(DM_DMSTATUS)).ALLHAVERESET);
-
-  // Clear halt request
-  set_dbg(DM_DMCONTROL, 0x00000001);
-
-  save_regs();
-
-  // Resetting the CPU resets DCSR, update it again.
-  patch_dcsr();
-
-  CHECK(sanity());
+  auto data_hi = get_mem_u32_aligned(addr_hi);
+  
+  return (data_lo >> (offset * 8)) | (data_hi << (32 - offset * 8));
 }
 
 //------------------------------------------------------------------------------
 
-bool OneWire::test_mem() {
-  CHECK(halted && sanity());
+uint16_t OneWire::get_mem_u16(uint32_t addr) {
+  auto offset  = addr & 3;
+  auto addr_lo = (addr + 0) & ~3;
+  auto addr_hi = (addr + 3) & ~3;
 
-  uint32_t base = 0x20000000;
-  int size_dwords = 512;
+  uint32_t data_lo = get_mem_u32_aligned(addr_lo);
 
-  uint32_t addr;
-  for (int i = 0; i < size_dwords; i++) {
-    addr = base + (4 * i);
-    set_mem_u32_aligned(addr, 0xBEEF0000 + i);
-  }
-  bool fail = false;
-  for (int i = 0; i < size_dwords; i++) {
-    addr = base + (4 * i);
-    uint32_t data = get_mem_u32_aligned(addr);
-    if (data != 0xBEEF0000 + i) {
-      printf("Memory test fail at 0x%08x : expected 0x%08x, got 0x%08x\n", addr, 0xBEEF0000 + i, data);
-      fail = true;
-    }
-  }
+  if (offset < 3) return data_lo >> (offset * 8);
 
-  Reg_ABSTRACTCS reg_abstractcs = get_dbg(DM_ABSTRACTCS);
-  if (reg_abstractcs.CMDER) {
-    printf("Memory test fail, CMDER=%d\n", reg_abstractcs.CMDER);
-    fail = true;
-  }
+  uint32_t data_hi = get_mem_u32_aligned(addr_hi);
 
-  //if (!fail) print("Memory test pass!\n");
-
-  CHECK(halted && sanity());
-  return fail;
+  return (data_lo >> 24) | (data_hi << 8);
 }
 
-#endif
+//------------------------------------------------------------------------------
 
+uint8_t OneWire::get_mem_u8(uint32_t addr) {
+  auto offset  = addr & 3;
+  auto addr_lo = (addr + 0) & ~3;
+  uint32_t data_lo = get_mem_u32_aligned(addr_lo);
 
+  return data_lo >> (offset * 8);
+}
+
+//------------------------------------------------------------------------------
+
+void OneWire::set_mem_u32(uint32_t addr, uint32_t data) {
+  auto offset  = addr & 3;
+  auto addr_lo = (addr + 0) & ~3;
+  auto addr_hi = (addr + 4) & ~3;
+
+  if (offset == 0) {
+    set_mem_u32_aligned(addr_lo, data);
+    return;
+  }
+  
+  uint32_t data_lo = get_mem_u32_aligned(addr_lo);
+  uint32_t data_hi = get_mem_u32_aligned(addr_hi);
+  
+  if (offset == 1) {
+    data_lo &= 0x000000FF;
+    data_hi &= 0xFFFFFF00;
+    data_lo |= data << 8;
+    data_hi |= data >> 24;
+  }
+  else if (offset == 2) {
+    data_lo &= 0x0000FFFF;
+    data_hi &= 0xFFFF0000;
+    data_lo |= data << 16;
+    data_hi |= data >> 16;
+  }
+  else if (offset == 3) {
+    data_lo &= 0x00FFFFFF;
+    data_hi &= 0xFF000000;
+    data_lo |= data << 24;
+    data_hi |= data >> 8;
+  }
+
+  set_mem_u32_aligned(addr_lo, data_lo);
+  set_mem_u32_aligned(addr_hi, data_hi);
+}
+
+//------------------------------------------------------------------------------
+
+void OneWire::set_mem_u16(uint32_t addr, uint16_t data) {
+  auto offset  = addr & 3;
+  auto addr_lo = (addr + 0) & ~3;
+  auto addr_hi = (addr + 3) & ~3;
+
+  uint32_t data_lo = get_mem_u32_aligned(addr_lo);
+
+  if (offset == 0) {
+    data_lo &= 0xFFFF0000;
+    data_lo |= data << 0;
+  }
+  else if (offset == 1) {
+    data_lo &= 0xFF0000FF;
+    data_lo |= data << 8;
+  }
+  else if (offset == 2) {
+    data_lo &= 0x0000FFFF;
+    data_lo |= data << 16;
+  }
+  else if (offset == 3) {
+    data_lo &= 0x00FFFFFF;
+    data_lo |= data << 24;
+  }
+
+  set_mem_u32_aligned(addr_lo, data_lo);
+
+  if (offset == 3) {
+    uint32_t data_hi = get_mem_u32_aligned(addr_hi);
+    data_hi &= 0xFFFFFF00;
+    data_hi |= data >> 8;
+    set_mem_u32_aligned(addr_hi, data_hi);
+  }
+}
+
+//------------------------------------------------------------------------------
+
+void OneWire::set_mem_u8(uint32_t addr, uint8_t data) {
+  auto offset  = addr & 3;
+  auto addr_lo = (addr + 0) & ~3;
+
+  uint32_t data_lo = get_mem_u32_aligned(addr_lo);
+
+  if (offset == 0) {
+    data_lo = (data_lo & 0xFFFFFF00) | (data << 0);
+  }
+  else if (offset == 1) {
+    data_lo = (data_lo & 0xFFFF00FF) | (data << 8);
+  }
+  else if (offset == 2) {
+    data_lo = (data_lo & 0xFF00FFFF) | (data << 16);
+  }
+  else if (offset == 3) {
+    data_lo = (data_lo & 0x00FFFFFF) | (data << 24);
+  }
+
+  set_mem_u32_aligned(addr_lo, data_lo);
+}
 
 //------------------------------------------------------------------------------
 
@@ -478,9 +678,9 @@ uint32_t OneWire::get_mem_u32_aligned(uint32_t addr) {
     0x00100073, // ebreak
   };
 
-  load_prog(prog_get_mem);
+  load_prog("get_mem_u32", prog_get_mem, BIT_A0 | BIT_A1);
   set_data1(addr);
-  run_prog();
+  run_prog_fast();
 
   auto result = get_data0();
 
@@ -489,56 +689,13 @@ uint32_t OneWire::get_mem_u32_aligned(uint32_t addr) {
 
 //------------------------------------------------------------------------------
 
-uint32_t OneWire::get_mem_u32_unaligned(uint32_t addr) {
-  auto offset  = addr & 3;
-  
-  auto addr_lo = (addr + 0) & ~3;
-  auto addr_hi = (addr + 3) & ~3;
-
-  uint32_t buf[2];
-  buf[0] = get_mem_u32_aligned(addr_lo);
-  buf[1] = get_mem_u32_aligned(addr_hi);
-
-  return *((uint32_t*)((uint8_t*)buf + offset));
-}
-
-//------------------------------------------------------------------------------
-
-uint16_t OneWire::get_mem_u16(uint32_t addr) {
-  auto offset  = addr & 3;
-  auto addr_lo = (addr + 0) & ~3;
-  auto addr_hi = (addr + 1) & ~3;
-
-  uint32_t buf[2];
-
-  if (addr_lo == addr_hi) {
-    buf[0] = get_mem_u32_aligned(addr_lo);
-    return *((uint16_t*)((uint8_t*)buf + offset));
-  }
-  else {
-    buf[0] = get_mem_u32_aligned(addr_lo);
-    buf[1] = get_mem_u32_aligned(addr_hi);
-    return *((uint16_t*)((uint8_t*)buf + offset));
-  }
-}
-
-//------------------------------------------------------------------------------
-
-uint8_t OneWire::get_mem_u8(uint32_t addr) {
-  auto offset  = addr & 3;
-  auto addr_lo = (addr + 0) & ~3;
-
-  uint32_t buf[2];
-  buf[0] = get_mem_u32_aligned(addr_lo);
-  return *((uint8_t*)buf + offset);
-}
-
-//------------------------------------------------------------------------------
-
 void OneWire::set_mem_u32_aligned(uint32_t addr, uint32_t data) {
-  if (addr & 3) printf("OneWire::set_mem_u32_aligned - Bad alignment 0x%08x\n", addr);
+  if (addr & 3) {
+    printf("OneWire::set_mem_u32_aligned - Bad alignment 0x%08x\n", addr);
+    return;
+  }
 
-  static uint32_t prog_put_mem[8] = {
+  static uint32_t prog_set_mem[8] = {
     0xe0000537, // lui  a0, 0xE0000
     0x0f852583, // lw   a1, 0x0F8(a0)
     0x0f452503, // lw   a0, 0x0F4(a0)
@@ -549,76 +706,19 @@ void OneWire::set_mem_u32_aligned(uint32_t addr, uint32_t data) {
     0x00100073, // ebreak
   };
 
-  load_prog(prog_put_mem);
+  load_prog("set_mem_u32", prog_set_mem, BIT_A0 | BIT_A1);
 
   set_data0(data);
   set_data1(addr);
-  run_prog();
-}
-
-//------------------------------------------------------------------------------
-
-void OneWire::set_mem_u32_unaligned(uint32_t addr, uint32_t data) {
-  auto offset  = addr & 3;
-  auto addr_lo = (addr + 0) & ~3;
-  auto addr_hi = (addr + 3) & ~3;
-
-  uint32_t buf[2];
-  buf[0] = get_mem_u32_aligned(addr_lo);
-  buf[1] = get_mem_u32_aligned(addr_hi);
-
-  *((uint32_t*)((uint8_t*)buf + offset)) = data;
-
-  set_mem_u32_aligned(addr_lo, buf[0]);
-  set_mem_u32_aligned(addr_hi, buf[1]);
-}
-
-//------------------------------------------------------------------------------
-
-void OneWire::set_mem_u16(uint32_t addr, uint16_t data) {
-  auto offset  = addr & 3;
-  auto addr_lo = (addr + 0) & ~3;
-  auto addr_hi = (addr + 1) & ~3;
-
-  uint32_t buf[2];
-
-  if (addr_lo == addr_hi) {
-    buf[0] = get_mem_u32_aligned(addr_lo);
-    *((uint16_t*)((uint8_t*)buf + offset)) = data;
-    set_mem_u32_aligned(addr_lo, buf[0]);
-  }
-  else {
-    buf[0] = get_mem_u32_aligned(addr_lo);
-    buf[1] = get_mem_u32_aligned(addr_hi);
-    *((uint16_t*)((uint8_t*)buf + offset)) = data;
-    set_mem_u32_aligned(addr_lo, buf[0]);
-    set_mem_u32_aligned(addr_hi, buf[1]);
-  }
-  return;
-}
-
-//------------------------------------------------------------------------------
-
-void OneWire::set_mem_u8(uint32_t addr, uint8_t data) {
-  auto offset  = addr & 3;
-  auto addr_lo = (addr + 0) & ~3;
-
-  uint32_t buf[1];
-
-  buf[0] = get_mem_u32_aligned(addr_lo);
-  *((uint8_t*)buf + offset) = data;
-  set_mem_u32_aligned(addr_lo, buf[0]);
-
-  return;
+  run_prog_fast();
 }
 
 //------------------------------------------------------------------------------
 // FIXME we should handle invalid address ranges somehow...
 
-void OneWire::get_block_aligned(uint32_t addr, void* dst, int size) {
-  CHECK(halted, "OneWire::get_block_aligned() not halted");
+void OneWire::get_block_aligned(uint32_t addr, void* dst, int size_bytes) {
   CHECK((addr & 3) == 0, "OneWire::get_block_aligned() bad address");
-  CHECK((size & 3) == 0, "OneWire::get_block_aligned() bad size");
+  CHECK((size_bytes & 3) == 0, "OneWire::get_block_aligned() bad size");
 
   static uint32_t prog_get_block_aligned[8] = {
     0xe0000537, // lui    a0, 0xE0000
@@ -631,19 +731,19 @@ void OneWire::get_block_aligned(uint32_t addr, void* dst, int size) {
     0x00100073, // ebreak
   };
 
-  load_prog(prog_get_block_aligned);
+  load_prog("get_block_aligned", prog_get_block_aligned, BIT_A0 | BIT_A1);
   set_data1(addr);
 
   uint32_t* cursor = (uint32_t*)dst;
-  for (int i = 0; i < size / 4; i++) {
-    run_prog();
+  for (int i = 0; i < size_bytes / 4; i++) {
+    run_prog_fast();
     cursor[i] = get_data0();
   }
 }
 
 //------------------------------------------------------------------------------
 
-void OneWire::get_block_unaligned(uint32_t addr, void* dst, int size) {
+void OneWire::get_block_unaligned(uint32_t addr, void* dst, int size_bytes) {
   static uint32_t prog_get_block_unaligned[8] = {
     0xe0000537, // lui    a0, 0xE0000
     0x0f852583, // lw     a1, 0x0F8(a0)
@@ -655,21 +755,21 @@ void OneWire::get_block_unaligned(uint32_t addr, void* dst, int size) {
     0x00100073, // ebreak
   };
 
-  load_prog(prog_get_block_unaligned);
+  load_prog("get_block_unaligned", prog_get_block_unaligned, BIT_A0 | BIT_A1);
   set_data1(addr);
 
   uint8_t* cursor = (uint8_t*)dst;
-  for (int i = 0; i < size; i++) {
-    run_prog();
+  for (int i = 0; i < size_bytes; i++) {
+    run_prog_fast();
     cursor[i] = get_data0();
   }
 }
 
 //------------------------------------------------------------------------------
 
-void OneWire::set_block_aligned(uint32_t addr, void* src, int size) {
+void OneWire::set_block_aligned(uint32_t addr, void* src, int size_bytes) {
   CHECK((addr & 3) == 0);
-  CHECK((size & 3) == 0);
+  CHECK((size_bytes & 3) == 0);
 
   static uint32_t prog_set_block_aligned[8] = {
     0xe0000537, // lui    a0, 0xE0000
@@ -683,20 +783,20 @@ void OneWire::set_block_aligned(uint32_t addr, void* src, int size) {
   };
 
 
-  load_prog(prog_set_block_aligned);
+  load_prog("set_block_aligned", prog_set_block_aligned, BIT_A0 | BIT_A1);
   set_data1(addr);
 
   uint32_t* cursor = (uint32_t*)src;
-  for (int i = 0; i < size / 4; i++) {
+  for (int i = 0; i < size_bytes / 4; i++) {
     set_data0(*cursor++);
-    run_prog();
+    run_prog_fast();
   }
 }
 
 //------------------------------------------------------------------------------
 
-void OneWire::set_block_unaligned(uint32_t addr, void* src, int size) {
-  static uint32_t prog_set_block_aligned[8] = {
+void OneWire::set_block_unaligned(uint32_t addr, void* src, int size_bytes) {
+  static uint32_t prog_set_block_unaligned[8] = {
     0xe0000537, // lui    a0, 0xE0000
     0x0f852583, // lw     a1, 0x0F8(a0)
     0x0f452503, // lw     a0, 0x0F4(a0)
@@ -707,13 +807,13 @@ void OneWire::set_block_unaligned(uint32_t addr, void* src, int size) {
     0x00100073, // ebreak
   };
 
-  load_prog(prog_set_block_aligned);
+  load_prog("set_block_unaligned", prog_set_block_unaligned, BIT_A0 | BIT_A1);
   set_data1(addr);
 
   uint8_t* cursor = (uint8_t*)src;
-  for (int i = 0; i < size; i++) {
+  for (int i = 0; i < size_bytes; i++) {
     set_data0(*cursor++);
-    run_prog();
+    run_prog_fast();
   }
 }
 

@@ -9,7 +9,7 @@ bool parse_binary_literal(const char*& cursor, int& out) {
   int sign = 1;
   int digits = 0;
 
-  while(*cursor && !isspace(*cursor)) {
+  while (*cursor && !isspace(*cursor)) {
     if (*cursor >= '0' && *cursor <= '1') {
       accum = accum * 2 + (*cursor - '0');
     }
@@ -41,7 +41,7 @@ bool parse_decimal_literal(const char*& cursor, int& out) {
     cursor++;
   }
 
-  while(*cursor && !isspace(*cursor)) {
+  while (*cursor && !isspace(*cursor)) {
     if (*cursor >= '0' && *cursor <= '9') {
       accum = accum * 10 + (*cursor - '0');
     }
@@ -68,7 +68,7 @@ bool parse_hex_literal(const char*& cursor, int& out) {
   int sign = 1;
   int digits = 0;
 
-  while(*cursor && !isspace(*cursor)) {
+  while (*cursor && !isspace(*cursor)) {
     if (*cursor >= '0' && *cursor <= '9') {
       accum = accum * 16 + (*cursor - '0');
     }
@@ -106,7 +106,7 @@ bool parse_octal_literal(const char*& cursor, int& out) {
     cursor++;
   }
 
-  while(*cursor && !isspace(*cursor)) {
+  while (*cursor && !isspace(*cursor)) {
     if (*cursor >= '0' && *cursor <= '7') {
       accum = accum * 8 + (*cursor - '0');
     }
@@ -135,7 +135,7 @@ bool parse_int_literal(const char*& cursor, int& out) {
   int sign = 1;
 
   // Skip leading whitespace
-  while(isspace(*cursor)) cursor++;
+  while (isspace(*cursor)) cursor++;
 
   if (*cursor != '0') {
     auto result = parse_decimal_literal(cursor, out);
@@ -165,7 +165,7 @@ bool parse_int_literal(const char*& cursor, int& out) {
 
 //------------------------------------------------------------------------------
 
-#define CHECK2(A) { if (!(A)) { while(1) *(uint32_t*)0xDEADBEEF = 0xF00DCAFE; } };
+#define CHECK2(A) { if (!(A)) { while (1) *(uint32_t*)0xDEADBEEF = 0xF00DCAFE; } };
 
 static struct autotest {
   autotest() {

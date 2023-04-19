@@ -3,6 +3,8 @@
 #include "WCH_Regs.h"
 #include <ctype.h>
 
+#define DEBUG_REMOTE
+
 uint32_t swap(uint32_t x) {
   uint32_t a = (x >>  0) & 0xFF;
   uint32_t b = (x >>  8) & 0xFF;
@@ -31,6 +33,22 @@ GDBServer::GDBServer() {
 void GDBServer::init(SLDebugger* sl) {
   this->sl = sl;
   this->wire = &sl->wire;
+}
+
+
+void GDBServer::on_connect()    {
+  if (!sl->halted) {
+    sl->halt();
+  }
+  connected = true;
+}
+
+void GDBServer::on_disconnect() {
+
+  if (sl->halted) {
+    sl->resume();
+  }
+  connected = false;
 }
 
 //------------------------------------------------------------------------------
@@ -103,14 +121,14 @@ void GDBServer::handle_c() {
   // Set PC if requested
   uint32_t addr = 0;
   if (recv.maybe_take_hex(addr)) {
-    wire->set_csr(CSR_DPC, addr);
+    sl->set_pc(addr);
   }
 
   // If we did not actually resume because we immediately hit a breakpoint,
   // respond with a "hit breakpoint" message. Otherwise we do not reply until
   // the hart stops.
 
-  if (!sl->resume2()) {
+  if (!sl->resume()) {
     send.set_packet("T05");
   }
 }
@@ -132,9 +150,9 @@ void GDBServer::handle_g() {
   if (!recv.error) {
     send.start_packet();
     for (int i = 0; i < 16; i++) {
-      send.put_hex_u32(wire->get_gpr(i));
+      send.put_hex_u32(sl->get_gpr(i));
     }
-    send.put_hex_u32(wire->get_csr(CSR_DPC));
+    send.put_hex_u32(sl->get_csr(CSR_DPC));
     send.end_packet();
   }
 }
@@ -146,9 +164,9 @@ void GDBServer::handle_G() {
   recv.take('G');
 
   for(int i = 0; i < 16; i++) {
-    wire->set_gpr(i, recv.take_hex(8));
+    sl->set_gpr(i, recv.take_hex(8));
   }
-  wire->set_csr(CSR_DPC, recv.take_hex(8));
+  sl->set_csr(CSR_DPC, recv.take_hex(8));
 
   send.set_packet(recv.error ? "E01" : "OK");
 }
@@ -189,8 +207,20 @@ void GDBServer::handle_m() {
   send.start_packet();
   uint32_t buf[256];
 
-  while(len) {
-    if ((src & 3) == 0 && len >= 4) {
+  while (len) {
+    if (len == 2) {
+      auto data = wire->get_mem_u16(src);
+      send.put_hex_u16(data);
+      src += 2;
+      len -= 2;
+    }
+    else if (len == 4) {
+      auto data = wire->get_mem_u32(src);
+      send.put_hex_u32(data);
+      src += 4;
+      len -= 4;
+    }
+    else if ((src & 3) == 0 && len >= 4) {
       int chunk = len & ~3;
       if (chunk > sizeof(buf)) chunk = sizeof(buf);
       wire->get_block_aligned(src, buf, chunk);
@@ -229,7 +259,7 @@ void GDBServer::handle_M() {
 
   uint32_t buf[256];
 
-  while(len) {
+  while (len) {
     if ((dst & 3) == 0 && len >= 4) {
       int chunk = len & ~3;
       if (chunk > sizeof(buf)) chunk = sizeof(buf);
@@ -259,10 +289,10 @@ void GDBServer::handle_p() {
   if (!recv.error) {
     send.start_packet();
     if (gpr == 16) {
-      send.put_hex_u32(wire->get_csr(CSR_DPC));
+      send.put_hex_u32(sl->get_csr(CSR_DPC));
     }
     else {
-      send.put_hex_u32(wire->get_gpr(gpr));
+      send.put_hex_u32(sl->get_gpr(gpr));
     }
     send.end_packet();
   }
@@ -279,10 +309,10 @@ void GDBServer::handle_P() {
 
   if (!recv.error) {
     if (gpr == 16) {
-      wire->set_csr(CSR_DPC, val);
+      sl->set_csr(CSR_DPC, val);
     }
     else {
-      wire->set_gpr(gpr, val);
+      sl->set_gpr(gpr, val);
     }
     send.set_packet("OK");
   }
@@ -350,7 +380,7 @@ void GDBServer::handle_q() {
 
     // reset in hex
     if (recv.match_prefix_hex("reset")) { 
-      sl->reset_cpu_and_halt();
+      sl->reset_cpu();
       send.set_packet("OK");
     }
   }
@@ -395,7 +425,7 @@ void GDBServer::handle_v() {
       recv.take(':');
       int addr = recv.take_hex();
       recv.take(":");
-      while((recv.cursor2 - recv.buf) < recv.size) {
+      while ((recv.cursor2 - recv.buf) < recv.size) {
         put_flash_cache(addr++, recv.take_char());
       }
       send.set_packet("OK");
@@ -422,7 +452,7 @@ void GDBServer::handle_v() {
   else if (recv.match_prefix("vKill")) {
     // FIXME should reset cpu or something?
     recv.cursor2 = recv.buf + recv.size;
-    sl->reset_cpu_and_halt();
+    sl->reset_cpu();
     send.set_packet("OK");
   }
   else if (recv.match_prefix("vMustReplyEmpty")) {
@@ -496,7 +526,7 @@ void GDBServer::flash_erase(int addr, int size) {
     return;
   }
 
-  while(1) {
+  while (1) {
     if (addr == 0x00000000 && size == 0x4000) {
       //printf("erase chip 0x%08x\n", addr);
       sl->wipe_chip();
@@ -560,7 +590,7 @@ void GDBServer::flush_flash_cache() {
       //printf("partial page write at 0x%08x, mask 0x%016llx\n", this->page_base, this->page_bitmap);
     }
 
-    sl->write_flash2(page_base, page_cache, SLDebugger::page_size);
+    sl->write_flash(page_base, page_cache, SLDebugger::page_size);
   }
 
   this->page_bitmap = 0;
@@ -784,12 +814,11 @@ void GDBServer::update(bool byte_ie, char byte_in, char& byte_out, bool& byte_oe
     }
   }
 
-#if 1
+#ifdef DEBUG_REMOTE
   if (byte_ie) printf(isprint(byte_in)  ? "%c" : "{%02x}", byte_in);
   if (byte_oe) printf(isprint(byte_out) ? "%c" : "{%02x}", byte_out);
 
   if (state != IDLE && next_state == IDLE) {
-    printf("\nCommand count %d", wire->cmd_count);
     wire->cmd_count = 0;
     printf("\n>> ");
   }

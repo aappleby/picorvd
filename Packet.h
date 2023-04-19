@@ -2,9 +2,9 @@
 #include <stdint.h>
 #include "utils.h"
 #include <ctype.h>
+#include "string.h"
 
 bool parse_int_literal(const char*& cursor, int& out);
-
 
 enum class ParseError {
   ERROR
@@ -13,9 +13,8 @@ enum class ParseError {
 struct Packet {
 
   void clear() {
-    for (int i = 0; i < 1024; i++) buf[i] = 0;
+    memset(buf, 0, sizeof(buf));
     size = 0;
-    //checksum = 0;
     error = false;
     cursor2 = buf;
     packet_valid = false;
@@ -97,7 +96,7 @@ struct Packet {
   }
 
   void take(const char* s) {
-    while(*s) take(*s++);
+    while (*s) take(*s++);
   }
 
   //----------------------------------------
@@ -121,7 +120,7 @@ struct Packet {
   uint32_t take_hex(int digits) {
     uint32_t accum = 0;
 
-    while(isspace(peek_char())) cursor2++;
+    while (isspace(peek_char())) cursor2++;
 
     for (int i = 0; i < digits; i++) {
       int digit = 0;
@@ -143,7 +142,7 @@ struct Packet {
     int accum = 0;
     bool any_digits = false;
 
-    while(isspace(peek_char())) cursor2++;
+    while (isspace(peek_char())) cursor2++;
 
     int digit = 0;
     for (int i = 0; i < 8; i++) {
@@ -276,7 +275,7 @@ struct Packet {
   bool match_prefix_hex(const char* p) {
     auto c = cursor2;
 
-    while(*p) {
+    while (*p) {
       auto hi = (*p >> 4) & 0xF;
       auto lo = (*p >> 0) & 0xF;
 
@@ -307,7 +306,7 @@ struct Packet {
   }
 
   void put_str(const char* s) {
-    while(*s) put(*s++);
+    while (*s) put(*s++);
   }
 
   void put_hex_u8(uint8_t x) {

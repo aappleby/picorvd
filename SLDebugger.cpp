@@ -12,11 +12,10 @@ SLDebugger::SLDebugger() {
 
 //------------------------------------------------------------------------------
 
-void SLDebugger::reset_dbg() {
-  CHECK(swd_pin != -1);
-
-  memset(saved_regs, 0, sizeof(saved_regs));
+void SLDebugger::reset_dbg(int swd_pin) {
   
+  wire.reset_dbg(swd_pin);
+
   breakpoint_count = 0;
   for (int i = 0; i < breakpoint_max; i++) {
     breakpoints[i] = BP_EMPTY;
@@ -31,136 +30,27 @@ void SLDebugger::reset_dbg() {
 
 //------------------------------------------------------------------------------
 
-void SLDebugger::attach() {
-  if (attached) {
-    //printf("SLDebugger::attach() - Already attached\n");
-    return;
-  }
-  else {
-    //printf("SLDebugger::attach()\n");
-  }
-
-  attached = true;
-
-  halted = wire.halted();
-  
-  // If we attach while running, halt momentarily so we can update DCSR to
-  // enable breakpoints etc.
-  if (!halted) {
-    wire.halt();
-  }
-
-  dcsr_on_attach = wire.get_csr(CSR_DCSR);
-  patch_dcsr();
-
-  // If we attach while running, resume.
-  if (!halted) {
-    wire.resume();
-  }
-
-  /*
-  if (halted) {
-    const char* halt_cause[] = {
-      "<not halted>",
-      "ebreak",
-      "trigger",
-      "halt request",
-      "step",
-      "halt on reset",
-      "<invalid6>",
-      "<invalid7>",
-    };
-    printf("SLDebugger::attach() - CPU is halted, cause = %s\n", halt_cause[dcsr_on_attach.CAUSE]);
-  }
-  else {
-    printf("SLDebugger::attach() - CPU is running\n");
-  }
-  */
-}
-
-//------------------------------------------------------------------------------
-
-void SLDebugger::detach() {
-  if (!attached) {
-    //printf("SLDebugger::detach() - Already detached\n");
-    return;
-  }
-  else {
-    //printf("SLDebugger::detach()\n");
-  }
-
-  // If we detach while running, halt momentarily so we can restore DCSR
-  if (!halted) {
-    wire.halt();
-  }
-
-  wire.set_csr(CSR_DCSR, dcsr_on_attach);
-
-  // If we detach while running, resume
-  if (!halted) {
-    wire.resume();
-  }
-
-  attached = false;
-}
-
-//------------------------------------------------------------------------------
-
-void SLDebugger::patch_dcsr() {
-  auto new_dcsr = dcsr_on_attach;
-  new_dcsr.EBREAKM = 1;
-  new_dcsr.EBREAKS = 1;
-  new_dcsr.EBREAKU = 1;
-  new_dcsr.STEPIE = 0;
-  new_dcsr.STOPCOUNT = 1;
-  new_dcsr.STOPTIME = 1;
-  wire.set_csr(CSR_DCSR, new_dcsr);
-}
-
-//------------------------------------------------------------------------------
-
-void SLDebugger::save_regs() {
-  for (int i = 0; i < reg_count; i++) {
-    saved_regs[i] = wire.get_gpr(i);
-  }
-  saved_pc = wire.get_csr(CSR_DPC);
-}
-
-void SLDebugger::load_regs() {
-  for (int i = 0; i < reg_count; i++) {
-    wire.set_gpr(i, saved_regs[i]);
-  }
-  wire.set_csr(CSR_DPC, saved_pc);
-}
-
-
-//------------------------------------------------------------------------------
-
 void SLDebugger::halt() {
-  CHECK(!halted, "SLDebugger::halt() - was already halted\n");
+  CHECK(!wire.is_halted(), "SLDebugger::halt() - was already halted\n");
 
   wire.halt();
-  halted = true;
-  halt_cause = Csr_DCSR(wire.get_csr(CSR_DCSR)).CAUSE;
-  save_regs();
+  //halt_cause = Csr_DCSR(wire.get_csr(CSR_DCSR)).CAUSE;
   unpatch_flash();
 }
 
 //------------------------------------------------------------------------------
 
 void SLDebugger::async_halted() {
-  CHECK(!halted, "SLDebugger::async_halted() - Was already halted\n");
+  CHECK(!wire.is_halted(), "SLDebugger::async_halted() - Was already halted\n");
 
-  halted = true;
-  halt_cause = Csr_DCSR(wire.get_csr(CSR_DCSR)).CAUSE;
-  save_regs();
+  //halt_cause = Csr_DCSR(wire.get_csr(CSR_DCSR)).CAUSE;
   unpatch_flash();
 }
 
 //------------------------------------------------------------------------------
 
-bool SLDebugger::resume2() {
-  CHECK(halted, "SLDebugger::resume() - was already resumed\n");
+bool SLDebugger::resume() {
+  CHECK(wire.is_halted(), "SLDebugger::resume() - was already resumed\n");
 
   // When resuming, we always step by one instruction first.
   step();
@@ -179,9 +69,6 @@ bool SLDebugger::resume2() {
 
   if (!on_breakpoint) {
     patch_flash();
-    load_regs();
-    halted = false;
-    halt_cause = 0;
     wire.resume();
     return true;
   }
@@ -194,26 +81,13 @@ bool SLDebugger::resume2() {
 //------------------------------------------------------------------------------
 
 void SLDebugger::step() {
-  //auto old_pc = wire.get_csr(CSR_DPC);
-  //printf("step() old_pc 0x%08x\n", old_pc);
-
-  load_regs();
-
   wire.step();
-
-  save_regs();
-  //auto new_pc = wire.get_csr(CSR_DPC);
-  //printf("step() new pc 0x%08x\n", new_pc);
 }
 
 //------------------------------------------------------------------------------
 
-void SLDebugger::reset_cpu_and_halt() {
-  wire.reset_cpu_and_halt();
-  halted = true;
-
-  save_regs();
-
+void SLDebugger::reset_cpu() {
+  wire.reset_cpu();
   // Resetting the CPU resets DCSR, update it again.
   patch_dcsr();
 }
@@ -221,27 +95,26 @@ void SLDebugger::reset_cpu_and_halt() {
 //------------------------------------------------------------------------------
 
 void SLDebugger::lock_flash() {
-  auto ctlr = Reg_FLASH_CTLR(wire.get_mem_u32_aligned(ADDR_FLASH_CTLR));
+  auto ctlr = Reg_FLASH_CTLR(wire.get_mem_u32(ADDR_FLASH_CTLR));
   ctlr.LOCK = true;
   ctlr.FLOCK = true;
-  wire.set_mem_u32_aligned(ADDR_FLASH_CTLR, ctlr);
+  wire.set_mem_u32(ADDR_FLASH_CTLR, ctlr);
 
-  CHECK(Reg_FLASH_CTLR(wire.get_mem_u32_aligned(ADDR_FLASH_CTLR)).LOCK);
-  CHECK(Reg_FLASH_CTLR(wire.get_mem_u32_aligned(ADDR_FLASH_CTLR)).FLOCK);
+  CHECK(Reg_FLASH_CTLR(wire.get_mem_u32(ADDR_FLASH_CTLR)).LOCK);
+  CHECK(Reg_FLASH_CTLR(wire.get_mem_u32(ADDR_FLASH_CTLR)).FLOCK);
 }
 
 //------------------------------------------------------------------------------
 
 void SLDebugger::unlock_flash() {
-  wire.set_mem_u32_aligned(ADDR_FLASH_KEYR,  0x45670123);
-  wire.set_mem_u32_aligned(ADDR_FLASH_KEYR,  0xCDEF89AB);
-  wire.set_mem_u32_aligned(ADDR_FLASH_MKEYR, 0x45670123);
-  wire.set_mem_u32_aligned(ADDR_FLASH_MKEYR, 0xCDEF89AB);
+  wire.set_mem_u32(ADDR_FLASH_KEYR,  0x45670123);
+  wire.set_mem_u32(ADDR_FLASH_KEYR,  0xCDEF89AB);
+  wire.set_mem_u32(ADDR_FLASH_MKEYR, 0x45670123);
+  wire.set_mem_u32(ADDR_FLASH_MKEYR, 0xCDEF89AB);
 
-  CHECK(!Reg_FLASH_CTLR(wire.get_mem_u32_aligned(ADDR_FLASH_CTLR)).LOCK);
-  CHECK(!Reg_FLASH_CTLR(wire.get_mem_u32_aligned(ADDR_FLASH_CTLR)).FLOCK);
+  CHECK(!Reg_FLASH_CTLR(wire.get_mem_u32(ADDR_FLASH_CTLR)).LOCK);
+  CHECK(!Reg_FLASH_CTLR(wire.get_mem_u32(ADDR_FLASH_CTLR)).FLOCK);
 }
-
 
 //------------------------------------------------------------------------------
 
@@ -269,17 +142,17 @@ void SLDebugger::wipe_chip() {
 // the buffer fills. This avoids needing an on-chip buffer at the cost of having
 // to do some assembly programming in the debug module.
 
-void SLDebugger::write_flash2(uint32_t dst_addr, void* data, int size) {
+void SLDebugger::write_flash(uint32_t dst_addr, void* data, int size) {
   unlock_flash();
 
-  if (size % 4) printf("SLDebugger::write_flash2() - Bad size %d\n", size);
+  if (size % 4) printf("SLDebugger::write_flash() - Bad size %d\n", size);
   int size_dwords = size / 4;
 
   //printf("SLDebugger::write_flash 0x%08x 0x%08x %d\n", dst_addr, data, size);
 
   dst_addr |= 0x08000000;
 
-  static const uint16_t prog_write_incremental[16] = {
+  static const uint16_t prog_write_flash[16] = {
     // Copy word and trigger BUFLOAD
     0x4180, // lw      s0,0(a1)
     0xc200, // sw      s0,0(a2)
@@ -310,10 +183,10 @@ void SLDebugger::write_flash2(uint32_t dst_addr, void* data, int size) {
     0xc950, // sw      a2,20(a0)
   };
 
-  wire.set_mem_u32_aligned(ADDR_FLASH_ADDR, dst_addr);
-  wire.set_mem_u32_aligned(ADDR_FLASH_CTLR, BIT_CTLR_FTPG | BIT_CTLR_BUFRST);
+  wire.set_mem_u32(ADDR_FLASH_ADDR, dst_addr);
+  wire.set_mem_u32(ADDR_FLASH_CTLR, BIT_CTLR_FTPG | BIT_CTLR_BUFRST);
 
-  wire.load_prog((uint32_t*)prog_write_incremental);
+  wire.load_prog("write_flash", (uint32_t*)prog_write_flash, BIT_S0 | BIT_A0 | BIT_A1 | BIT_A2 | BIT_A3 | BIT_A4 | BIT_A5);
   wire.set_gpr(10, 0x40022000); // flash base
   wire.set_gpr(11, 0xE00000F4); // DATA0 @ 0xE00000F4
   wire.set_gpr(12, dst_addr);
@@ -324,7 +197,7 @@ void SLDebugger::write_flash2(uint32_t dst_addr, void* data, int size) {
   bool first_word = true;
   int page_count = (size_dwords + 15) / 16;
 
-  // Start feeding dwords to prog_write_incremental.
+  // Start feeding dwords to prog_write_flash.
 
   for (int page = 0; page < page_count; page++) {
     //printf("!");
@@ -332,30 +205,34 @@ void SLDebugger::write_flash2(uint32_t dst_addr, void* data, int size) {
       //printf(".");
       int offset = (page * SLDebugger::page_size) + (dword_idx * sizeof(uint32_t));
       uint32_t* src = (uint32_t*)((uint8_t*)data + offset);
+
       wire.set_data0(dword_idx < size_dwords ? *src : 0xDEADBEEF);
+
       if (first_word) {
         // There's a chip bug here - we can't set AUTOCMD before COMMAND or
         // things break all weird
-        const uint32_t cmd_runprog = 0x00040000;
-        wire.set_dbg(DM_COMMAND, cmd_runprog);
+
+        wire.run_prog_slow();
         wire.set_dbg(DM_ABSTRACTAUTO, 0x00000001);
         first_word = false;
       }
+      else {
+        // We can write flash slightly faster if we only busy-wait at the end
+        // of each page, but I am wary...
+        while (Reg_ABSTRACTCS(wire.get_dbg(DM_ABSTRACTCS)).BUSY);
+      }
 
-      // We can write flash slightly faster if we only busy-wait at the end
-      // of each page, but I am wary...
-      while(Reg_ABSTRACTCS(wire.get_dbg(DM_ABSTRACTCS)).BUSY);
     }
   }
 
   wire.set_dbg(DM_ABSTRACTAUTO, 0x00000000);
-  wire.set_mem_u32_aligned(ADDR_FLASH_CTLR, 0);
+  wire.set_mem_u32(ADDR_FLASH_CTLR, 0);
 
   {
     // FIXME what was this for? why are we setting EOP?
-    auto statr = Reg_FLASH_STATR(wire.get_mem_u32_aligned(ADDR_FLASH_STATR));
+    auto statr = Reg_FLASH_STATR(wire.get_mem_u32(ADDR_FLASH_STATR));
     statr.EOP = 1;
-    wire.set_mem_u32_aligned(ADDR_FLASH_STATR, statr);
+    wire.set_mem_u32(ADDR_FLASH_STATR, statr);
   }
 }
 
@@ -364,16 +241,15 @@ void SLDebugger::write_flash2(uint32_t dst_addr, void* data, int size) {
 void SLDebugger::status() {
   printf("----------------------------------------\n");
   printf("SLDebugger::status()\n");
-  printf("Attached: %d\n", attached);
 
   wire.status();
 
-  if (halted) {
+  if (wire.is_halted()) {
     printf("----------\n");
-    Reg_FLASH_STATR(wire.get_mem_u32_aligned(ADDR_FLASH_STATR)).dump();
-    Reg_FLASH_CTLR(wire.get_mem_u32_aligned(ADDR_FLASH_CTLR)).dump();
-    Reg_FLASH_OBR(wire.get_mem_u32_aligned(ADDR_FLASH_OBR)).dump();
-    printf("ADDR_FLASH_WPR = 0x%08x\n", wire.get_mem_u32_aligned(ADDR_FLASH_WPR));
+    Reg_FLASH_STATR(wire.get_mem_u32(ADDR_FLASH_STATR)).dump();
+    Reg_FLASH_CTLR(wire.get_mem_u32(ADDR_FLASH_CTLR)).dump();
+    Reg_FLASH_OBR(wire.get_mem_u32(ADDR_FLASH_OBR)).dump();
+    printf("ADDR_FLASH_WPR = 0x%08x\n", wire.get_mem_u32(ADDR_FLASH_WPR));
 
     printf("----------\n");
     Csr_DCSR(wire.get_csr(CSR_DCSR)).dump();
@@ -409,10 +285,10 @@ void SLDebugger::dump_ram() {
 // Dumps the first 1K of flash.
 
 void SLDebugger::dump_flash() {
-  Reg_FLASH_STATR(wire.get_mem_u32_aligned(ADDR_FLASH_STATR)).dump();
-  Reg_FLASH_CTLR(wire.get_mem_u32_aligned(ADDR_FLASH_CTLR)).dump();
-  Reg_FLASH_OBR(wire.get_mem_u32_aligned(ADDR_FLASH_OBR)).dump();
-  printf("flash_wpr 0x%08x\n", wire.get_mem_u32_aligned(ADDR_FLASH_WPR));
+  Reg_FLASH_STATR(wire.get_mem_u32(ADDR_FLASH_STATR)).dump();
+  Reg_FLASH_CTLR(wire.get_mem_u32(ADDR_FLASH_CTLR)).dump();
+  Reg_FLASH_OBR(wire.get_mem_u32(ADDR_FLASH_OBR)).dump();
+  printf("flash_wpr 0x%08x\n", wire.get_mem_u32(ADDR_FLASH_WPR));
 
   int lines = 64;
 
@@ -429,7 +305,7 @@ void SLDebugger::dump_flash() {
 //------------------------------------------------------------------------------
 
 void SLDebugger::run_flash_command(uint32_t addr, uint32_t ctl1, uint32_t ctl2) {
-  static const uint16_t prog_run_command[16] = {
+  static const uint16_t prog_flash_command[16] = {
     0xc94c, // sw      a1,20(a0)
     0xc910, // sw      a2,16(a0)
     0xc914, // sw      a3,16(a0)
@@ -452,12 +328,12 @@ void SLDebugger::run_flash_command(uint32_t addr, uint32_t ctl1, uint32_t ctl2) 
     0x9002, // ebreak
   };
 
-  wire.load_prog((uint32_t*)prog_run_command);
+  wire.load_prog("flash_command", (uint32_t*)prog_flash_command, BIT_A0 | BIT_A1 | BIT_A2 | BIT_A3 | BIT_A5);
   wire.set_gpr(10, 0x40022000);   // flash base
   wire.set_gpr(11, addr);
   wire.set_gpr(12, ctl1);
   wire.set_gpr(13, ctl2);
-  wire.run_prog();
+  wire.run_prog_slow();
 }
 
 //------------------------------------------------------------------------------
@@ -581,6 +457,30 @@ int SLDebugger::clear_breakpoint(uint32_t addr, int size) {
 
 //------------------------------------------------------------------------------
 
+void SLDebugger::clear_all_breakpoints() {
+  bool was_halted = wire.is_halted();
+
+  if (!was_halted) halt();
+
+  for (int i = 0; i < breakpoint_max; i++) {
+    breakpoints[i] = BP_EMPTY;
+  }
+  breakpoint_count = 0;
+
+  if (!was_halted) resume();
+}
+
+//------------------------------------------------------------------------------
+
+bool SLDebugger::has_breakpoint(uint32_t addr) {
+  for (int i = 0; i < breakpoint_max; i++) {
+    if (breakpoints[i] == addr) return true;
+  }
+  return false;
+}
+
+//------------------------------------------------------------------------------
+
 void SLDebugger::dump_breakpoints() {
   printf("//----------\n");
   printf("Breakpoints:\n");
@@ -618,7 +518,7 @@ void SLDebugger::patch_page(int page) {
   printf("patching page %d to have %d breakpoints\n", page, break_map[page]);
   int page_base = page * page_size;
   wipe_page(page_base);
-  write_flash2(page_base, flash_dirty + page_base, page_size);
+  write_flash(page_base, flash_dirty + page_base, page_size);
   flash_map[page] = break_map[page];
   dirty_map[page] = 0;
 }
@@ -629,7 +529,7 @@ void SLDebugger::unpatch_page(int page) {
   printf("unpatching page %d\n", page);
   int page_base = page * page_size;
   wipe_page(page_base);
-  write_flash2(page_base, flash_clean + page_base, page_size);
+  write_flash(page_base, flash_clean + page_base, page_size);
   flash_map[page] = 0;
   dirty_map[page] = 1;
 }

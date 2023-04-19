@@ -41,7 +41,7 @@ bool from_hex(char c, int& out) {
 //------------------------------------------------------------------------------
 
 int cmp(const char* prefix, const char* text) {
-  while(1) {
+  while (1) {
     // Note we return when we run out of matching prefix, not when both
     // strings match.
     if (*prefix == 0)    return 0;
@@ -62,7 +62,7 @@ int _atoi(const char* cursor) {
   }
 
   int accum = 0;
-  while(*cursor) {
+  while (*cursor) {
     if (*cursor < '0' || *cursor > '9') break;
     accum *= 10;
     accum += *cursor++ - '0';
@@ -79,7 +79,7 @@ bool atoi2(const char* cursor, int& out) {
 
   bool any_digits = false;
   int accum = 0;
-  while(*cursor) {
+  while (*cursor) {
     if (*cursor < '0' || *cursor > '9') break;
     any_digits = true;
     accum *= 10;
@@ -107,7 +107,7 @@ char* atox(char* cursor, int& out) {
   bool any_digits = false;
   int accum = 0;
   int digit = 0;
-  while(from_hex(*cursor, digit)) {
+  while (from_hex(*cursor, digit)) {
     any_digits = true;
     accum = (accum << 4) | digit;
     cursor++;

@@ -1,15 +1,12 @@
 #include "Console.h"
 #include "utils.h"
 #include "SLDebugger.h"
-#include "WCH_Regs.h"
 #include "pico/stdlib.h"
 #include "tests.h"
 #include "blink.h"
+#include <functional>
 
 //------------------------------------------------------------------------------
-
-Console::Console() {
-}
 
 void Console::init(SLDebugger* sl) {
   this->sl = sl;
@@ -18,127 +15,112 @@ void Console::init(SLDebugger* sl) {
 
 //------------------------------------------------------------------------------
 
-void Console::dispatch_command() {
-  //CHECK(sl->sanity());
-  auto wire = &sl->wire;
+struct ConsoleHandler {
+  const char* name;
+  std::function<void(Console&)> handler;
+};
 
-  bool handled = false;
+ConsoleHandler handlers[] = {
+  //{ "run_tests",     [](Console& c) { run_tests(*c.sl);       } },
 
-  if (packet.match_word("attach")) {
-    sl->attach();
-    handled = true;
-  }
+  { "status",        [](Console& c) { c.sl->status();         } },
+  { "reset_dbg",     [](Console& c) { c.sl->reset_dbg();      } },
+  { "reset_cpu",     [](Console& c) { c.sl->reset_cpu();      } },
+  { "clear_err",     [](Console& c) { c.sl->wire.clear_err(); } },
 
-  if (packet.match_word("detach")) {
-    sl->detach();
-    handled = true;
-  }
+  { "resume",        [](Console& c) { c.sl->resume();         } },
+  { "step",          [](Console& c) { c.sl->step();           } },
+  { "halt",          [](Console& c) { c.sl->halt(); printf("Halted at DPC = 0x%08x\n", c.sl->wire.get_csr(CSR_DPC)); } },
 
-  if (packet.match_word("status"))             { handled = true; sl->status(); }
-  if (packet.match_word("wipe_chip"))          { handled = true; sl->wipe_chip(); }
+  { "lock_flash",    [](Console& c) { c.sl->lock_flash();     } },
+  { "unlock_flash",  [](Console& c) { c.sl->unlock_flash();   } },
+  { "wipe_chip",     [](Console& c) { c.sl->wipe_chip();      } },
+  { "write_flash",   [](Console& c) { c.sl->write_flash(0x00000000, blink_bin, blink_bin_len); } },
 
-  if (packet.match_word("write_flash")) {
-    sl->write_flash2(0x00000000, blink_bin, blink_bin_len);
-    handled = true;
-  }
+  {
+    "dump",
+    [](Console& c) {
+      auto addr = c.packet.take_int().ok_or(0x08000000);
 
-  if (packet.match_word("resume")) {
-    sl->resume2();
-    handled = true;
-  }
-
-  if (packet.match_word("halt")) {
-    sl->halt();
-    printf("Halted at DPC = 0x%08x\n", wire->get_csr(CSR_DPC));
-    handled = true; 
-  }
-
-  if (packet.match_word("reset_dbg"))          { handled = true; sl->reset_dbg(); }
-  if (packet.match_word("reset_cpu_and_halt")) { handled = true; sl->reset_cpu_and_halt(); }
-  if (packet.match_word("clear_err"))          { handled = true; wire->clear_err(); }
-  if (packet.match_word("lock_flash"))         { handled = true; sl->lock_flash(); }
-  if (packet.match_word("unlock_flash"))       { handled = true; sl->unlock_flash(); }
-
-  if (packet.match_word("patch_flash"))        { handled = true; sl->patch_flash(); }
-  if (packet.match_word("unpatch_flash"))      { handled = true; sl->unpatch_flash(); }
-
-  if (packet.match_word("dump")) {
-    auto addr = packet.take_int().ok_or(0x08000000);
-
-    if (addr & 3) {
-      printf("dump - bad addr 0x%08x\n", addr);
-    }
-    else {
-      uint32_t buf[512];
-      wire->get_block_aligned(addr, buf, 2048);
-      for (int y = 0; y < 64; y++) {
-        for (int x = 0; x < 8; x++) {
-          printf("0x%08x ", buf[x + 8*y]);
+      if (addr & 3) {
+        printf("dump - bad addr 0x%08x\n", addr);
+      }
+      else {
+        uint32_t buf[512];
+        c.sl->wire.get_block_aligned(addr, buf, 2048);
+        for (int y = 0; y < 64; y++) {
+          for (int x = 0; x < 8; x++) {
+            printf("0x%08x ", buf[x + 8*y]);
+          }
+          printf("\n");
         }
-        printf("\n");
       }
     }
-    handled = true;
-  }
+  },
 
-  if (packet.match_word("step")) {
-    printf("DPC before step 0x%08x\n", wire->get_csr(CSR_DPC));
-    sl->step();
-    printf("DPC after step  0x%08x\n", wire->get_csr(CSR_DPC));
-    handled = true;
-  }
-
-  if (packet.match_word("set_bp")) {
-    auto addr = packet.take_int();
-    if (addr.is_ok()) {
-      uint32_t op = wire->get_mem_u32_unaligned(addr);
-      printf("bp op 0x%08x\n", op);
-      auto size = ((op & 3) == 3) ? 4 : 2;
-      sl->set_breakpoint(addr, size);
+  {
+    "set_bp",
+    [](Console& c) {
+      auto addr = c.packet.take_int();
+      if (addr.is_ok()) c.sl->set_breakpoint(addr, 2);
     }
-    else {
-      printf("Breakpoint address missing\n");
+  },
+
+  {
+    "clear_bp",
+    [](Console& c) {
+      auto addr = c.packet.take_int();
+      if (addr.is_ok()) c.sl->clear_breakpoint(addr, 2);
     }
-    handled = true;
-  }
+  },
 
-  if (packet.match_word("clear_bp")) {
-    auto addr = packet.take_int();
-    if (addr.is_ok()) {
-      uint32_t op = wire->get_mem_u32_unaligned(addr);
-      printf("bp op 0x%08x\n", op);
-      auto size = ((op & 3) == 3) ? 4 : 2;
-      sl->clear_breakpoint(addr, size);
+  {
+    "dump_bp",
+    [](Console& c) {
+      c.sl->dump_breakpoints();
     }
-    else {
-      printf("Breakpoint address missing\n");
+  },
+
+  {
+    "patch_flash",
+    [](Console& c) {
+      c.sl->patch_flash();
     }
-    handled = true;
+  },
+
+  {
+    "unpatch_flash",
+    [](Console& c) {
+      c.sl->unpatch_flash();
+    }
+  },
+};
+
+static const int handler_count = sizeof(handlers) / sizeof(handlers[0]);
+
+//------------------------------------------------------------------------------
+
+void Console::dispatch_command() {
+  for (int i = 0; i < handler_count; i++) {
+    auto& h = handlers[i];
+    if (packet.match_word(h.name)) {
+      h.handler(*this);
+      return;
+    }
   }
-
-  if (packet.match_word("dump_bp")) {
-    sl->dump_breakpoints();
-    handled = true;
-  }
-
-
-  if (!handled) {
-    printf("Command %s not handled\n", packet.buf);
-  }
-
-  //CHECK(sl->sanity());
+  printf("Command %s not handled\n", packet.buf);
 }
 
 //------------------------------------------------------------------------------
 
 void Console::update(bool ser_ie, char ser_in) {
   if (ser_ie) {
-    if (ser_in == 8) {
+    if (ser_in == 8 /*backspace*/) {
       printf("\b \b");
-      *packet.cursor2 = 0;
       if (packet.cursor2 > packet.buf) {
         packet.cursor2--;
         packet.size--;
+        *packet.cursor2 = 0;
       }
     }
     else if (ser_in == '\n' || ser_in == '\r') {
@@ -147,11 +129,6 @@ void Console::update(bool ser_ie, char ser_in) {
 
       printf("\n");
       uint32_t time_a = time_us_32();
-
-      //printf("Console packet {%s}\n", packet.buf);
-      //printf("%d\n", (packet.cursor2 - packet.buf));
-      //printf("%d\n", packet.size);
-
       dispatch_command();
       uint32_t time_b = time_us_32();
 
