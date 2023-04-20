@@ -1,16 +1,25 @@
 #include "Console.h"
+
 #include "utils.h"
-#include "SLDebugger.h"
-#include "pico/stdlib.h"
+#include "RVDebug.h"
+#include "WCHFlash.h"
+#include "SoftBreak.h"
 #include "tests.h"
 #include "blink.h"
+
 #include <functional>
+#include "pico/stdlib.h"
 
 //------------------------------------------------------------------------------
 
-void Console::init(SLDebugger* sl) {
-  this->sl = sl;
+Console::Console(RVDebug* rvd, WCHFlash* flash, SoftBreak* soft) {
+  this->rvd = rvd;
+  this->flash = flash;
+  this->soft = soft;
   printf("\n>> ");
+}
+
+void Console::reset() {
 }
 
 //------------------------------------------------------------------------------
@@ -23,22 +32,21 @@ struct ConsoleHandler {
 ConsoleHandler handlers[] = {
   //{ "run_tests",     [](Console& c) { run_tests(*c.sl);       } },
 
-  { "status",        [](Console& c) { c.sl->status();         } },
-  { "reset_dbg",     [](Console& c) { c.sl->reset_dbg();      } },
-  { "reset_cpu",     [](Console& c) { c.sl->reset_cpu();      } },
-  { "clear_err",     [](Console& c) { c.sl->wire.clear_err(); } },
+  //{ "dump",          [](Console& c) { c.sl->status();         } },
+  //{ "reset_dbg",     [](Console& c) { c.sl->reset_dbg();      } },
+  //{ "reset_cpu",     [](Console& c) { c.rvd->reset_cpu();      } },
 
-  { "resume",        [](Console& c) { c.sl->resume();         } },
-  { "step",          [](Console& c) { c.sl->step();           } },
-  { "halt",          [](Console& c) { c.sl->halt(); printf("Halted at DPC = 0x%08x\n", c.sl->wire.get_csr(CSR_DPC)); } },
+  { "resume",        [](Console& c) { c.soft->resume();         } },
+  { "step",          [](Console& c) { c.soft->step();           } },
+  { "halt",          [](Console& c) { c.soft->halt(); printf("Halted at DPC = 0x%08x\n", c.rvd->get_dpc()); } },
 
-  { "lock_flash",    [](Console& c) { c.sl->lock_flash();     } },
-  { "unlock_flash",  [](Console& c) { c.sl->unlock_flash();   } },
-  { "wipe_chip",     [](Console& c) { c.sl->wipe_chip();      } },
-  { "write_flash",   [](Console& c) { c.sl->write_flash(0x00000000, blink_bin, blink_bin_len); } },
+  { "lock_flash",    [](Console& c) { c.flash->lock_flash();     } },
+  { "unlock_flash",  [](Console& c) { c.flash->unlock_flash();   } },
+  { "wipe_chip",     [](Console& c) { c.flash->wipe_chip();      } },
+  { "write_flash",   [](Console& c) { c.flash->write_flash(0x00000000, blink_bin, blink_bin_len); } },
 
   {
-    "dump",
+    "dump_addr",
     [](Console& c) {
       auto addr = c.packet.take_int().ok_or(0x08000000);
 
@@ -47,7 +55,7 @@ ConsoleHandler handlers[] = {
       }
       else {
         uint32_t buf[512];
-        c.sl->wire.get_block_aligned(addr, buf, 2048);
+        c.rvd->get_block_aligned(addr, buf, 2048);
         for (int y = 0; y < 64; y++) {
           for (int x = 0; x < 8; x++) {
             printf("0x%08x ", buf[x + 8*y]);
@@ -62,7 +70,7 @@ ConsoleHandler handlers[] = {
     "set_bp",
     [](Console& c) {
       auto addr = c.packet.take_int();
-      if (addr.is_ok()) c.sl->set_breakpoint(addr, 2);
+      if (addr.is_ok()) c.soft->set_breakpoint(addr, 2);
     }
   },
 
@@ -70,30 +78,32 @@ ConsoleHandler handlers[] = {
     "clear_bp",
     [](Console& c) {
       auto addr = c.packet.take_int();
-      if (addr.is_ok()) c.sl->clear_breakpoint(addr, 2);
+      if (addr.is_ok()) c.soft->clear_breakpoint(addr, 2);
     }
   },
 
   {
     "dump_bp",
     [](Console& c) {
-      c.sl->dump_breakpoints();
+      c.soft->dump();
     }
   },
 
+  /*
   {
     "patch_flash",
     [](Console& c) {
-      c.sl->patch_flash();
+      c.soft->patch_flash();
     }
   },
 
   {
     "unpatch_flash",
     [](Console& c) {
-      c.sl->unpatch_flash();
+      c.soft->unpatch_flash();
     }
   },
+  */
 };
 
 static const int handler_count = sizeof(handlers) / sizeof(handlers[0]);

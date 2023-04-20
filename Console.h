@@ -1,12 +1,20 @@
 #pragma once
 #include "Packet.h"
 
-struct SLDebugger;
+struct RVDebug;
+struct WCHFlash;
+struct SoftBreak;
 
 struct Console {
-  void init(SLDebugger* sl);
+  Console(RVDebug* rvd, WCHFlash* flash, SoftBreak* soft);
+  void reset();
+
   void update(bool ser_ie, char ser_in);
   void dispatch_command();
-  SLDebugger* sl = nullptr;
+
   Packet packet;
+
+  RVDebug* rvd;
+  WCHFlash* flash;
+  SoftBreak* soft;
 };

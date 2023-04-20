@@ -1,31 +1,17 @@
 #include <stdio.h>
-#include <string.h>
-#include <stdarg.h>
+
 #include "pico/stdlib.h"
-#include "hardware/gpio.h"
-#include "pico/binary_info.h"
-#include "build/singlewire.pio.h"
-#include "hardware/clocks.h"
-#include "SLDebugger.h"
-#include "GDBServer.h"
-#include "utils.h"
-#include "WCH_Regs.h"
-#include <assert.h>
-#include <ctype.h>
 #include "tusb.h"
+
+#include "PicoSWIO.h"
+#include "RVDebug.h"
+#include "WCHFlash.h"
+#include "SoftBreak.h"
 #include "Console.h"
-
-//------------------------------------------------------------------------------
-
-static SLDebugger sl;
-static GDBServer server;
-static Console console;
+#include "GDBServer.h"
 
 const uint SWD_PIN = 28;
-
-extern "C" {
-  void uart_read_blocking (uart_inst_t *uart, uint8_t *dst, size_t len);
-};
+const int ch32v003_flash_size = 16*1024;
 
 //------------------------------------------------------------------------------
 
@@ -37,24 +23,52 @@ int main() {
   tud_init(BOARD_TUD_RHPORT);
 
   printf("\n\n\n");
-  printf("================================================================================\n");
-  printf("PicoDebug 0.0.2\n");
+  printf("//==============================================================================\n");
+  printf("// PicoDebug 0.0.2\n");
 
-  sl.reset_dbg(SWD_PIN);
+  printf("//----------------------------------------\n");
+  printf("// PicoSWIO\n");
+  PicoSWIO* swio = new PicoSWIO();
+  swio->reset(SWD_PIN);
+  printf("\n");
+  swio->dump();
+  printf("\n");
 
-  printf("<starting gdb server>\n");
-  server.init(&sl);
-  server.state = GDBServer::IDLE;
-  server.connected = false;
+  printf("//----------------------------------------\n");
+  printf("// RVDebug\n");
+  RVDebug* rvd = new RVDebug(swio);
+  rvd->reset();
+  printf("\n");
+  rvd->dump();
+  printf("\n");
 
-  printf("<starting console>\n");
-  console.init(&sl);
+  printf("//----------------------------------------\n");
+  printf("// WCHFlash\n");
+  WCHFlash* flash = new WCHFlash(rvd, ch32v003_flash_size);
+  flash->reset();
+  printf("\n");
+  rvd->halt();
+  flash->dump();
+  rvd->resume();
+  printf("\n");
 
-  // Takes like 40 microseconds to poll DMSTATUS
+  printf("//----------------------------------------\n");
+  printf("// SoftBreak\n");
+  SoftBreak* soft = new SoftBreak(rvd, flash);
+  soft->reset();
+  soft->dump();
 
-  bool old_connected = false;
+  printf("//----------------------------------------\n");
+  printf("// Console\n");
+  Console* console = new Console(rvd, flash, soft);
+  console->reset();
 
-  uint32_t last_halt_check = time_us_32();
+  printf("//----------------------------------------\n");
+  printf("// GDBServer\n");
+  GDBServer* gdb = new GDBServer(rvd, flash, soft);
+  gdb->reset();
+
+  printf("Everything up and running!\n");
 
   while (1) {
     //----------------------------------------
@@ -63,55 +77,22 @@ int main() {
     tud_task();
 
     //----------------------------------------
-    // Update debug interface status
-
-    bool new_connected = tud_cdc_n_connected(0);
-
-    if (!old_connected && new_connected) {
-      printf("GDB connected\n");
-      sl.attach();
-      server.on_connect();
-    }
-    
-    if (old_connected && !new_connected) {
-      printf("GDB disconnected\n");
-      server.on_disconnect();
-      sl.detach();
-    }
-
-    if (!sl.is_halted()) {
-      uint32_t now = time_us_32();
-      if ((now - last_halt_check) > 100000) {
-        if (sl.hit_breakpoint()) {
-          //printf("\nCore halted due to breakpoint @ 0x%08x\n", sl.get_csr(CSR_DPC));
-          sl.async_halted();
-          if (server.connected) {
-            server.send.set_packet("T05");
-            server.state = GDBServer::SEND_PREFIX;
-          }
-        }
-        last_halt_check = now;
-      }
-    }
-
-    //----------------------------------------
     // Update GDB stub
 
-    if (server.connected) {
-      bool usb_ie = tud_cdc_n_available(0); // this "available" check is required for some reason
-      char usb_in = 0;
-      if (usb_ie) {
-        tud_cdc_n_read(0, &usb_in, 1);
-      }
+    bool connected = tud_cdc_n_connected(0);
+    bool usb_ie = tud_cdc_n_available(0); // this "available" check is required for some reason
+    char usb_in = 0;
+    char usb_out = 0;
+    bool usb_oe = 0;
 
-      char usb_out = 0;
-      bool usb_oe = 0;
-      server.update(usb_ie, usb_in, usb_out, usb_oe);
+    if (usb_ie) {
+      tud_cdc_n_read(0, &usb_in, 1);
+    }
+    gdb->update(connected, usb_ie, usb_in, usb_oe, usb_out);
 
-      if (usb_oe) {
-        tud_cdc_n_write(0, &usb_out, 1);
-        tud_cdc_n_write_flush(0);
-      }
+    if (usb_oe) {
+      tud_cdc_n_write(0, &usb_out, 1);
+      tud_cdc_n_write_flush(0);
     }
 
     //----------------------------------------
@@ -119,12 +100,12 @@ int main() {
 
     bool ser_ie = uart_is_readable(uart0);
     char ser_in = 0;
-    if (ser_ie) uart_read_blocking(uart0, (uint8_t*)&ser_in, 1);
-    console.update(ser_ie, ser_in);
 
-    old_connected = new_connected;
+    if (ser_ie) {
+      uart_read_blocking(uart0, (uint8_t*)&ser_in, 1);
+    }
+    console->update(ser_ie, ser_in);
   }
-
 
   return 0;
 }

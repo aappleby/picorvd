@@ -1,4 +1,4 @@
 #pragma once
 
-struct OneWire;
-void run_tests(OneWire& wire);
+struct RVDebug;
+void run_tests(RVDebug& wire);

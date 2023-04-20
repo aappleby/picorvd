@@ -10,14 +10,16 @@ pico_sdk_init()
 add_executable(
   test
   main.cpp
-  tests.cpp
-  SLDebugger.cpp
-  GDBServer.cpp
-  utils.cpp
+  PicoSWIO.cpp
+  RVDebug.cpp
+  WCHFlash.cpp
+  SoftBreak.cpp
   Packet.cpp
   Console.cpp
+  GDBServer.cpp
+  utils.cpp
+  tests.cpp
   usb_config.cpp
-  OneWire.cpp
 )
 
 pico_generate_pio_header(test ${CMAKE_CURRENT_SOURCE_DIR}/singlewire.pio)

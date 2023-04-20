@@ -1,17 +1,20 @@
 #pragma once
 #include "utils.h"
-#include "SLDebugger.h"
 #include "Packet.h"
+
+struct RVDebug;
+struct WCHFlash;
+struct SoftBreak;
 
 //------------------------------------------------------------------------------
 
 struct GDBServer {
 public:
 
-  GDBServer();
-  void init(SLDebugger* sl);
+  GDBServer(RVDebug* rvd, WCHFlash* flash, SoftBreak* soft);
+  void reset();
 
-  void update(bool byte_ie, char byte_in, char& byte_out, bool& byte_oe);
+  void update(bool connected, bool byte_ie, char byte_in, bool& byte_oe, char& byte_out);
 
 //private:
 
@@ -24,9 +27,6 @@ public:
 
   static const handler handler_tab[];
   static const int handler_count;
-
-  void on_connect();
-  void on_disconnect();
 
   void handle_questionmark();
   void handle_bang();
@@ -61,20 +61,21 @@ public:
   void put_flash_cache(int addr, uint8_t data);
   void flush_flash_cache();
 
-  bool connected = false;
-
-  SLDebugger* sl = nullptr;
-  OneWire*    wire = nullptr;
+  RVDebug* rvd = nullptr;
+  WCHFlash* flash = nullptr;
+  SoftBreak* soft = nullptr;
 
   Packet   send;
   Packet   recv;
 
-  uint8_t  page_cache[64];
+  uint8_t* page_cache;
   int      page_base = -1;
   uint64_t page_bitmap = 0;
 
   enum {
-    INIT,
+    DISCONNECTED,
+    RUNNING,
+    KILLED,
     IDLE,
     RECV_PACKET,
     RECV_PACKET_ESCAPE,
@@ -91,9 +92,11 @@ public:
     RECV_ACK,
   };
 
-  int state = INIT;
+  int state = DISCONNECTED;
+  int next_state = DISCONNECTED;
   char expected_checksum = 0;
   uint8_t checksum = 0;
+  uint32_t last_halt_check;
 };
 
 //------------------------------------------------------------------------------
