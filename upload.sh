@@ -1,2 +1,1 @@
-mkdir -p build
-cmake -B build && make -C build && openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000" -c "program build/picorvd.elf verify reset exit"
+openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000" -c "program bin/picorvd.elf verify reset exit"

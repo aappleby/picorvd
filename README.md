@@ -13,4 +13,10 @@ set debug remote 1
 target extended-remote /dev/ttyACM1
 ```
 
+Building:
+
+Make sure PICO_SDK_PATH is set in your environment and run "build.sh" to compile.
+
+Run "upload.sh" to upload the app to your Pico if it's connected to a Pico Debug Probe, or just use the standard hold-reset-and-reboot to mount your Pico as a flash drive and then copy bin/picorvd.uf2 to it.
+
 NOTE - This repo is not ready for public consumption yet, I need to fix up some issues created during refactoring and merge the standalone blink example into this repo for testing.

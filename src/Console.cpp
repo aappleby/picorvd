@@ -4,8 +4,8 @@
 #include "RVDebug.h"
 #include "WCHFlash.h"
 #include "SoftBreak.h"
-#include "tests.h"
-#include "blink.h"
+#include "test/tests.h"
+#include "example/blink.h"
 
 #include <functional>
 #include "pico/stdlib.h"

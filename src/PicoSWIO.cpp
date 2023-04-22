@@ -1,5 +1,5 @@
 #include "PicoSWIO.h"
-#include "build/singlewire.pio.h"
+#include "bin/singlewire.pio.h"
 #include "debug_defines.h"
 
 #include "utils.h"
