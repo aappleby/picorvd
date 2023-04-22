@@ -140,6 +140,9 @@ private:
 
 //------------------------------------------------------------------------------
 
+const int BIT_DMACTIVE     = (1 <<  0);
+const int BIT_ACKHAVERESET = (1 << 28);
+
 struct Reg_DMCONTROL {
   Reg_DMCONTROL(uint32_t raw = 0) { this->raw = raw; }
   operator uint32_t() const { return raw; }
@@ -147,13 +150,20 @@ struct Reg_DMCONTROL {
 
   union {
     struct {
-      uint32_t DMACTIVE     : 1;
-      uint32_t NDMRESET     : 1;
-      uint32_t PAD0         : 26;
-      uint32_t ACKHAVERESET : 1;
-      uint32_t PAD1         : 1;
-      uint32_t RESUMEREQ    : 1;
-      uint32_t HALTREQ      : 1;
+      uint32_t DMACTIVE        : 1;
+      uint32_t NDMRESET        : 1;
+      uint32_t CLRRESETHALTREQ : 1;
+      uint32_t SETRESETHALTREQ : 1;
+      uint32_t CLRKEEPALIVE    : 1;
+      uint32_t SETKEEPALIVE    : 1;
+      uint32_t HARTSELHI       : 10;
+      uint32_t HARTSELLO       : 10;
+      uint32_t HASEL           : 1;
+      uint32_t ACKUNAVAIL      : 1;
+      uint32_t ACKHAVERESET    : 1;
+      uint32_t HARTRESET       : 1;
+      uint32_t RESUMEREQ       : 1;
+      uint32_t HALTREQ         : 1;
     };
     uint32_t raw;
   };
@@ -161,6 +171,10 @@ struct Reg_DMCONTROL {
 static_assert(sizeof(Reg_DMCONTROL) == 4);
 
 //------------------------------------------------------------------------------
+
+const int BIT_ALLHALTED    = (1 <<  9);
+const int BIT_ALLRUNNING   = (1 << 11);
+const int BIT_ALLRESUMEACK = (1 << 17);
 
 struct Reg_DMSTATUS {
   Reg_DMSTATUS(uint32_t raw = 0) { this->raw = raw; }

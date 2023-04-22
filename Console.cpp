@@ -32,9 +32,9 @@ struct ConsoleHandler {
 ConsoleHandler handlers[] = {
   //{ "run_tests",     [](Console& c) { run_tests(*c.sl);       } },
 
-  //{ "dump",          [](Console& c) { c.sl->status();         } },
-  //{ "reset_dbg",     [](Console& c) { c.sl->reset_dbg();      } },
-  //{ "reset_cpu",     [](Console& c) { c.rvd->reset_cpu();      } },
+  { "status",        [](Console& c) { c.rvd->dump();         } },
+  //{ "reset_dbg",     [](Console& c) { c.rvd->reset_dbg();      } },
+  { "reset_cpu",     [](Console& c) { c.rvd->reset_cpu();      } },
 
   { "resume",        [](Console& c) { c.soft->resume();         } },
   { "step",          [](Console& c) { c.soft->step();           } },
@@ -49,14 +49,15 @@ ConsoleHandler handlers[] = {
     "dump_addr",
     [](Console& c) {
       auto addr = c.packet.take_int().ok_or(0x08000000);
+      printf("addr 0x%08x\n", addr);
 
       if (addr & 3) {
         printf("dump - bad addr 0x%08x\n", addr);
       }
       else {
-        uint32_t buf[512];
-        c.rvd->get_block_aligned(addr, buf, 2048);
-        for (int y = 0; y < 64; y++) {
+        uint32_t buf[24*8];
+        c.rvd->get_block_aligned(addr, buf, 24*8*4);
+        for (int y = 0; y < 24; y++) {
           for (int x = 0; x < 8; x++) {
             printf("0x%08x ", buf[x + 8*y]);
           }

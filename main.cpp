@@ -8,19 +8,19 @@
 #include "WCHFlash.h"
 #include "SoftBreak.h"
 #include "Console.h"
-#include "GDBServer.h"
+#include "GDBServer.h"  
+#include "debug_defines.h"
 
-const uint SWD_PIN = 28;
+const int PIN_SWIO = 28;
+const int PIN_UART_TX = 0;
+const int PIN_UART_RX = 1;
 const int ch32v003_flash_size = 16*1024;
 
 //------------------------------------------------------------------------------
 
 int main() {
   // Enable non-USB serial port on gpio 0/1 for meta-debug output :D
-  stdio_uart_init_full(uart0, 1000000, 0, 1);
-
-  // Init USB
-  tud_init(BOARD_TUD_RHPORT);
+  stdio_uart_init_full(uart0, 1000000, PIN_UART_TX, PIN_UART_RX);
 
   printf("\n\n\n");
   printf("//==============================================================================\n");
@@ -29,18 +29,48 @@ int main() {
   printf("//----------------------------------------\n");
   printf("// PicoSWIO\n");
   PicoSWIO* swio = new PicoSWIO();
-  swio->reset(SWD_PIN);
+  swio->reset(PIN_SWIO);
   printf("\n");
   swio->dump();
   printf("\n");
 
+#if 0
+  swio->put(DM_DMCONTROL, 0x80000001);
+  while (!(swio->get(DM_DMSTATUS) & BIT_ALLHALTED)) {
+    printf("not halted yet\n");
+  }
+  swio->put(DM_DMCONTROL, 0x00000001);
+
+  swio->put(DM_DMCONTROL, 0x40000001);
+  //while (!(swio->get(DM_DMSTATUS) & BIT_ALLRESUMEACK)) {
+  while (!(swio->get(DM_DMSTATUS) & BIT_ALLRUNNING)) {
+    printf("not resumed yet\n");
+  }
+  swio->put(DM_DMCONTROL, 0x00000001);
+
+  Reg_DMSTATUS(swio->get(DM_DMSTATUS)).dump();
+#endif
+
+
   printf("//----------------------------------------\n");
   printf("// RVDebug\n");
   RVDebug* rvd = new RVDebug(swio);
-  rvd->reset();
-  printf("\n");
+
+  swio->put(DM_DMCONTROL, BIT_DMACTIVE | BIT_ACKHAVERESET);
+
+  //rvd->halt();
+  //rvd->resume();
+
+  rvd->reset_cpu();
+
+  rvd->resume();
+
   rvd->dump();
   printf("\n");
+
+  printf("ok\n");
+
+#if 0
 
   printf("//----------------------------------------\n");
   printf("// WCHFlash\n");
@@ -68,7 +98,12 @@ int main() {
   GDBServer* gdb = new GDBServer(rvd, flash, soft);
   gdb->reset();
 
-  printf("Everything up and running!\n");
+  printf("//----------------------------------------\n");
+  printf("// USB\n");
+  tud_init(BOARD_TUD_RHPORT);
+
+  printf("//----------------------------------------\n");
+  printf("// Everything up and running!\n");
 
   while (1) {
     //----------------------------------------
@@ -106,6 +141,8 @@ int main() {
     }
     console->update(ser_ie, ser_in);
   }
+
+#endif
 
   return 0;
 }

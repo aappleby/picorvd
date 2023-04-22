@@ -52,10 +52,10 @@ void SoftBreak::reset() {
 
 void SoftBreak::halt() {
   if (halted) return;
+  halted = true;
 
   rvd->halt();
   unpatch_flash();
-  halted = true;
 }
 
 //------------------------------------------------------------------------------

@@ -51,10 +51,12 @@ void RVDebug::reset() {
   // Halt momentarily if needed so we can enable breakpoints in DCSR
   bool was_halted = get_dmstatus().ALLHALTED;
   if (!was_halted) {
+    printf("Was not halted on startup\n");
     halt();
   }
   
   // Turn on debug breakpoints & stop counters/timers during debug
+  /*
   auto dcsr = get_dcsr();
   dcsr.EBREAKM = 1;
   dcsr.EBREAKS = 1;
@@ -63,6 +65,7 @@ void RVDebug::reset() {
   dcsr.STOPCOUNT = 1;
   dcsr.STOPTIME = 1;
   set_dcsr(dcsr);
+  */
 
   // Resume if we were halted
   if (!was_halted) {
@@ -143,6 +146,7 @@ void RVDebug::halt() {
 
   set_dmcontrol(0x80000001);
   while (!get_dmstatus().ALLHALTED) {
+    printf("not halted yet\n");
   }
   set_dmcontrol(0x00000001);
 
@@ -155,7 +159,9 @@ void RVDebug::resume() {
   printf("RVDebug::resume()\n");
 
   set_dmcontrol(0x40000001);
+  // We can't check ALLRUNNING because we might hit a breakpoint immediately
   while (!get_dmstatus().ALLRESUMEACK) {
+    printf("not resumed yet\n");
   }
   set_dmcontrol(0x00000001);
 
@@ -174,6 +180,7 @@ void RVDebug::step() {
   set_dcsr(dcsr);
 
   set_dmcontrol(0x40000001);
+  // We can't check ALLRUNNING because we might hit a breakpoint immediately
   while (!get_dmstatus().ALLRESUMEACK) {
   }
   // we might be able to skip this check?
