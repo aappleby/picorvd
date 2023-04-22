@@ -26,84 +26,35 @@ int main() {
   printf("//==============================================================================\n");
   printf("// PicoDebug 0.0.2\n");
 
-  printf("//----------------------------------------\n");
-  printf("// PicoSWIO\n");
+  printf("// Starting PicoSWIO\n");
   PicoSWIO* swio = new PicoSWIO();
   swio->reset(PIN_SWIO);
-  printf("\n");
-  swio->dump();
-  printf("\n");
 
-#if 0
-  swio->put(DM_DMCONTROL, 0x80000001);
-  while (!(swio->get(DM_DMSTATUS) & BIT_ALLHALTED)) {
-    printf("not halted yet\n");
-  }
-  swio->put(DM_DMCONTROL, 0x00000001);
-
-  swio->put(DM_DMCONTROL, 0x40000001);
-  //while (!(swio->get(DM_DMSTATUS) & BIT_ALLRESUMEACK)) {
-  while (!(swio->get(DM_DMSTATUS) & BIT_ALLRUNNING)) {
-    printf("not resumed yet\n");
-  }
-  swio->put(DM_DMCONTROL, 0x00000001);
-
-  Reg_DMSTATUS(swio->get(DM_DMSTATUS)).dump();
-#endif
-
-
-  printf("//----------------------------------------\n");
-  printf("// RVDebug\n");
+  printf("// Starting RVDebug\n");
   RVDebug* rvd = new RVDebug(swio);
+  rvd->reset();
 
-  swio->put(DM_DMCONTROL, BIT_DMACTIVE | BIT_ACKHAVERESET);
-
-  //rvd->halt();
-  //rvd->resume();
-
-  rvd->reset_cpu();
-
-  rvd->resume();
-
-  rvd->dump();
-  printf("\n");
-
-  printf("ok\n");
-
-#if 0
-
-  printf("//----------------------------------------\n");
-  printf("// WCHFlash\n");
+  printf("// Starting WCHFlash\n");
   WCHFlash* flash = new WCHFlash(rvd, ch32v003_flash_size);
   flash->reset();
-  printf("\n");
-  rvd->halt();
-  flash->dump();
-  rvd->resume();
-  printf("\n");
 
-  printf("//----------------------------------------\n");
-  printf("// SoftBreak\n");
+  printf("// Starting SoftBreak\n");
   SoftBreak* soft = new SoftBreak(rvd, flash);
   soft->reset();
-  soft->dump();
 
-  printf("//----------------------------------------\n");
-  printf("// Console\n");
-  Console* console = new Console(rvd, flash, soft);
-  console->reset();
-
-  printf("//----------------------------------------\n");
-  printf("// GDBServer\n");
+  printf("// Starting GDBServer\n");
   GDBServer* gdb = new GDBServer(rvd, flash, soft);
   gdb->reset();
 
-  printf("//----------------------------------------\n");
-  printf("// USB\n");
+  printf("// Starting USB\n");
   tud_init(BOARD_TUD_RHPORT);
 
-  printf("//----------------------------------------\n");
+  printf("// Starting Console\n");
+  Console* console = new Console(rvd, flash, soft);
+
   printf("// Everything up and running!\n");
+
+  console->reset();
 
   while (1) {
     //----------------------------------------
@@ -142,7 +93,6 @@ int main() {
     console->update(ser_ie, ser_in);
   }
 
-#endif
 
   return 0;
 }

@@ -16,10 +16,10 @@ Console::Console(RVDebug* rvd, WCHFlash* flash, SoftBreak* soft) {
   this->rvd = rvd;
   this->flash = flash;
   this->soft = soft;
-  printf("\n>> ");
 }
 
 void Console::reset() {
+  printf("\n>> ");
 }
 
 //------------------------------------------------------------------------------

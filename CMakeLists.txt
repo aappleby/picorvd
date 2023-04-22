@@ -30,6 +30,7 @@ target_compile_definitions(picorvd PRIVATE PARAM_ASSERTIONS_ENABLE_ALL=1)
 
 target_include_directories(picorvd PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
+  # This directory is required so that TinyUSB can find src/tusb_config.h
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
