@@ -32,7 +32,9 @@ NOTE - This repo is not ready for public consumption yet, I need to fix up some 
 PicoRVD is broken up into a couple modules that can (in principle) be reused independently:
 
 ### PicoSWIO
-Implements the WCH SWIO protocol using the Pico's PIO block. Exposes a trivial get(addr)/put(addr,data) interface.
+Implements the WCH SWIO protocol using the Pico's PIO block. Exposes a trivial get(addr)/put(addr,data) interface. Does not currently support "fast mode", but the standard mode runs at ~800kbps and should suffice.
+
+Spec here - https://github.com/openwch/ch32v003/blob/main/RISC-V%20QingKeV2%20Microprocessor%20Debug%20Manual.pdf
 
 ### RVDebug
 Exposes the various registers in the official RISC-V debug spec along with methods to read/write memory over the main bus and halt/resume/reset the CPU.
@@ -42,11 +44,15 @@ Spec here - https://github.com/riscv/riscv-debug-spec/blob/master/riscv-debug-st
 ### WCHFlash
 Methods to read/write the CH32V003's flash. Most stuff hardcoded at the moment. WCHFlash does _not_ clobber device RAM, instead it streams data directly to the flash page buffer. This means that in theory you should be able to use it to replace flash contents without needing to reset the CPU, though I haven't tested that yet.
 
+CH32V003 reference manual here - http://www.wch-ic.com/downloads/CH32V003RM_PDF.html
+
 ### SoftBreak
 The CH32V003 chip does _not_ support any hardware breakpoints. The official WCH-Link dongle simulates breakpoints by patching and unpatching flash every time it halts/resumes the processor. SoftBreak does something similar, but with optimizations to minimize the number of page updates needed. It also avoids page updates during the common 'single-step by setting breakpoints on every instruction' thing that GDB does, which makes stepping way faster.
 
 ### GDBServer
 Communicates with the GDB host via the Pico's USB-to-serial port. Translates the GDB remote protocol into commands for RVDebug/WCHFlash/SoftBreak.
+
+See "Appendix E" here for spec - https://sourceware.org/gdb/current/onlinedocs/gdb.pdf
 
 ### Console
 A trivial serial console on UART0 (pins GP0/GP1) that implements methods for debugging the debugger itself and basic device inspection.
