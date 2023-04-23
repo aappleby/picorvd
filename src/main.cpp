@@ -66,14 +66,13 @@ int main() {
   console->start();
   while (1) {
 
-#if 0
     //----------------------------------------
     // Update TinyUSB
 
-    static bool tud_init = false;
-    if (!tud_init) {
+    static bool tud_init_done = false;
+    if (!tud_init_done) {
       tud_init(BOARD_TUD_RHPORT);
-      tud_init = true;
+      tud_init_done = true;
     }
     tud_task();
 
@@ -95,7 +94,6 @@ int main() {
       tud_cdc_n_write(0, &usb_out, 1);
       tud_cdc_n_write_flush(0);
     }
-#endif
 
     //----------------------------------------
     // Update uart console

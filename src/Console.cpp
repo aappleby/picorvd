@@ -5,7 +5,7 @@
 #include "WCHFlash.h"
 #include "SoftBreak.h"
 #include "test/tests.h"
-#include "example/blink.h"
+#include "example/bin/blink.h"
 
 #include <functional>
 #include "pico/stdlib.h"
@@ -80,7 +80,7 @@ ConsoleHandler handlers[] = {
       }
     }
   },
-  
+
   {
     "step",
     [](Console& c) {
