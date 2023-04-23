@@ -182,7 +182,7 @@ void RVDebug::load_prog(const char *name, uint32_t *prog, uint32_t clobber) {
 
   prog_will_clobber = clobber;
 
-  //printf("RVDebug::load_prog() done\n");
+  //LOG("RVDebug::load_prog() done\n");
 }
 
 //------------------------------------------------------------------------------
@@ -372,7 +372,7 @@ bool RVDebug::sanity() {
 
   auto dmcontrol = get_dmcontrol();
   if (dmcontrol != 0x00000001) {
-    printf("sanity() : DMCONTROL was not clean (was 0x%08x, expected "
+    LOG_R("sanity() : DMCONTROL was not clean (was 0x%08x, expected "
            "0x00000001)\n",
            dmcontrol);
     ok = false;
@@ -380,14 +380,14 @@ bool RVDebug::sanity() {
 
   auto abstractcs = get_abstractcs();
   if (abstractcs != 0x08000002) {
-    printf("sanity() : ABSTRACTCS was not clean (was 0x%08x, expected "
+    LOG_R("sanity() : ABSTRACTCS was not clean (was 0x%08x, expected "
            "0x08000002)\n");
     ok = false;
   }
 
   auto autocmd = get_abstractauto();
   if (autocmd != 0x00000000) {
-    printf(
+    LOG_R(
         "sanity() : AUTOCMD was not clean (was 0x%08x, expected 0x00000000)\n");
     ok = false;
   }
@@ -533,7 +533,7 @@ void RVDebug::set_mem_u8(uint32_t addr, uint8_t data) {
 
 uint32_t RVDebug::get_mem_u32_aligned(uint32_t addr) {
   if (addr & 3) {
-    printf("RVDebug::get_mem_u32_aligned() - Bad address 0x%08x\n", addr);
+    LOG_R("RVDebug::get_mem_u32_aligned() - Bad address 0x%08x\n", addr);
     return 0;
   }
 
@@ -561,7 +561,7 @@ uint32_t RVDebug::get_mem_u32_aligned(uint32_t addr) {
 
 void RVDebug::set_mem_u32_aligned(uint32_t addr, uint32_t data) {
   if (addr & 3) {
-    printf("RVDebug::set_mem_u32_aligned - Bad alignment 0x%08x\n", addr);
+    LOG_R("RVDebug::set_mem_u32_aligned - Bad alignment 0x%08x\n", addr);
     return;
   }
 

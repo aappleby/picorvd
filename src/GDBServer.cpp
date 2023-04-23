@@ -143,7 +143,7 @@ void GDBServer::handle_D() {
   CHECK(false, "GDBServer::handle_D() - Need to double check how to implement this");
 
   recv.take('D');
-  printf("GDB detaching\n");
+  LOG("GDB detaching\n");
   send.set_packet("OK");
   next_state = DISCONNECTED;
 }
@@ -214,7 +214,7 @@ void GDBServer::handle_m() {
   int len = recv.take_hex();
 
   if (recv.error) {
-    printf("\nhandle_m %x %x - recv.error '%s'\n", src, len, recv.buf);
+    LOG_R("\nhandle_m %x %x - recv.error '%s'\n", src, len, recv.buf);
     send.set_packet("");
     return;
   }
@@ -268,7 +268,7 @@ void GDBServer::handle_M() {
   recv.take(':');
 
   if (recv.error) {
-    printf("\nhandle_M %x %x - recv.error '%s'\n", dst, len, recv.buf);
+    LOG_R("\nhandle_M %x %x - recv.error '%s'\n", dst, len, recv.buf);
     send.set_packet("");
     return;
   }
@@ -344,9 +344,9 @@ void GDBServer::handle_P() {
 // > $qRcmd,72657365742030#fc+
 
 void GDBServer::handle_q() {
-  //printf("\n");
-  //printf("GDBServer::handle_q()\n");
-  //printf("%s\n", recv.cursor2);
+  //LOG("\n");
+  //LOG("GDBServer::handle_q()\n");
+  //LOG("%s\n", recv.cursor2);
 
   if (recv.match_prefix("qAttached")) {
     // Query what GDB is attached to
@@ -465,7 +465,7 @@ void GDBServer::handle_v() {
       recv.take(',');
       int size = recv.take_hex();
       if (recv.error) {
-        printf("\nBad vFlashErase packet!\n");
+        LOG_R("\nBad vFlashErase packet!\n");
         send.set_packet("E00");
       }
       else {
@@ -500,7 +500,7 @@ void GDBServer::handle_z0() {
   recv.take(',');
   uint32_t kind = recv.take_hex();
 
-  //printf("GDBServer::handle_z0 0x%08x 0x%08x\n", addr, kind);
+  //LOG("GDBServer::handle_z0 0x%08x 0x%08x\n", addr, kind);
   soft->clear_breakpoint(addr, kind);
 
   send.set_packet("OK");
@@ -513,7 +513,7 @@ void GDBServer::handle_Z0() {
   recv.take(',');
   uint32_t kind = recv.take_hex();
 
-  //printf("GDBServer::handle_Z0 0x%08x 0x%08x\n", addr, kind);
+  //LOG("GDBServer::handle_Z0 0x%08x 0x%08x\n", addr, kind);
   soft->set_breakpoint(addr, kind);
 
   send.set_packet("OK");
@@ -529,7 +529,7 @@ void GDBServer::handle_z1() {
   recv.take(',');
   uint32_t kind = recv.take_hex();
 
-  //printf("GDBServer::handle_z1 0x%08x 0x%08x\n", addr, kind);
+  //LOG("GDBServer::handle_z1 0x%08x 0x%08x\n", addr, kind);
   soft->clear_breakpoint(addr, kind);
 
   send.set_packet("OK");
@@ -542,7 +542,7 @@ void GDBServer::handle_Z1() {
   recv.take(',');
   uint32_t kind = recv.take_hex();
 
-  //printf("GDBServer::handle_Z1 0x%08x 0x%08x\n", addr, kind);
+  //LOG("GDBServer::handle_Z1 0x%08x 0x%08x\n", addr, kind);
   soft->set_breakpoint(addr, kind);
 
   send.set_packet("OK");
@@ -559,27 +559,27 @@ void GDBServer::flash_erase(int addr, int size) {
 
   // Erases must be page-aligned
   if ((addr % page_size) || (size % page_size)) {
-    printf("\nBad vFlashErase - addr %x size %x\n", addr, size);
+    LOG_R("\nBad vFlashErase - addr %x size %x\n", addr, size);
     send.set_packet("E00");
     return;
   }
 
   while (size) {
     if (addr == flash->get_flash_base() && size == flash_size) {
-      //printf("erase chip 0x%08x\n", addr);
+      //LOG("erase chip 0x%08x\n", addr);
       flash->wipe_chip();
       send.set_packet("OK");
       addr += size;
       size -= size;
     }
     else if (((addr % sector_size) == 0) && (size >= sector_size)) {
-      //printf("erase sector 0x%08x\n", addr);
+      //LOG("erase sector 0x%08x\n", addr);
       flash->wipe_sector(addr);
       addr += sector_size;
       size -= sector_size;
     }
     else if (((addr % page_size) == 0) && (size >= page_size)) {
-      //printf("erase page 0x%08x\n", addr);
+      //LOG("erase page 0x%08x\n", addr);
       flash->wipe_page(addr);
       addr += page_size;
       size -= page_size;
@@ -605,7 +605,7 @@ void GDBServer::put_flash_cache(int addr, uint8_t data) {
   this->page_base = page_base;
 
   if (this->page_bitmap & (1 << page_offset)) {
-    printf("\nByte in flash page written multiple times\n");
+    LOG_R("\nByte in flash page written multiple times\n");
   }
   else {
     this->page_cache[page_offset] = data;
@@ -619,16 +619,16 @@ void GDBServer::flush_flash_cache() {
   if (page_base == -1) return;
 
   if (!page_bitmap) {
-    // empty page cache, nothing to do
-    //printf("empty page write at    0x%08x\n", this->page_base);
+    // empty page cache, nothing to do - why did this happen?
+    LOG_R("empty page write at    0x%08x\n", this->page_base);
   }
   else  {
     if (page_bitmap == 0xFFFFFFFFFFFFFFFF) {
       // full page write
-      //printf("full page write at    0x%08x\n", this->page_base);
+      //LOG("full page write at    0x%08x\n", this->page_base);
     }
     else {
-      //printf("partial page write at 0x%08x, mask 0x%016llx\n", this->page_base, this->page_bitmap);
+      //LOG("partial page write at 0x%08x, mask 0x%016llx\n", this->page_base, this->page_bitmap);
     }
 
     flash->write_flash(page_base, page_cache, flash->get_page_size());
@@ -655,27 +655,27 @@ void GDBServer::handle_packet() {
     (*this.*h)();
 
     if (recv.error) {
-      printf("\nParse failure for packet!\n");
+      LOG_R("\nParse failure for packet!\n");
       send.set_packet("E00");
     }
     else if ((recv.cursor2 - recv.buf) != recv.size) {
-      printf("\nLeftover text in packet - \"%s\"\n", recv.cursor2);
+      LOG_R("\nLeftover text in packet - \"%s\"\n", recv.cursor2);
     }
   }
   else {
-    printf("\nNo handler for command %s\n", recv.buf);
+    LOG_R("\nNo handler for command %s\n", recv.buf);
     send.set_packet("");
   }
 
   if (!send.packet_valid) {
-    printf("\nNot responding to command {%s}\n", recv.buf);
+    LOG_R("\nNot responding to command {%s}\n", recv.buf);
   }
 }
 
 //------------------------------------------------------------------------------
 
 void GDBServer::on_hit_breakpoint() {
-  printf("Breaking\n");
+  //LOG("Breaking\n");
   send.set_packet("T05");
   state = SEND_PREFIX;
 }
@@ -690,13 +690,13 @@ void GDBServer::update(bool connected, bool byte_ie, char byte_in, bool& byte_oe
   // Connection/disconnection
 
   if (state == DISCONNECTED && connected) {
-    printf("GDB connected\n");
+    LOG("GDB connected\n");
     soft->halt();
     state = IDLE;
     next_state = IDLE;
   }
   else if (state != DISCONNECTED && !connected) {
-    printf("GDB disconnected\n");
+    LOG("GDB disconnected\n");
     soft->clear_all_breakpoints();
     soft->resume();
     state = DISCONNECTED;
@@ -714,7 +714,7 @@ void GDBServer::update(bool connected, bool byte_ie, char byte_in, bool& byte_oe
     case RUNNING: {
       if (byte_in == '\x003') {
         // Got a break character from GDB while running.
-        printf("Breaking\n");
+        LOG("Breaking\n");
         soft->halt();
         send.set_packet("T05");
         next_state = SEND_PREFIX;
@@ -794,10 +794,10 @@ void GDBServer::update(bool connected, bool byte_ie, char byte_in, bool& byte_oe
         expected_checksum = (expected_checksum << 4) | from_hex(byte_in);
 
         if (checksum != expected_checksum) {
-          printf("\n");
-          printf("Packet transmission error\n");
-          printf("expected checksum 0x%02x\n", expected_checksum);
-          printf("actual checksum   0x%02x\n", checksum);
+          LOG_R("\n");
+          LOG_R("Packet transmission error\n");
+          LOG_R("expected checksum 0x%02x\n", expected_checksum);
+          LOG_R("actual checksum   0x%02x\n", checksum);
           byte_out = '-';
           byte_oe = true;
           next_state = IDLE;
@@ -806,7 +806,7 @@ void GDBServer::update(bool connected, bool byte_ie, char byte_in, bool& byte_oe
           // Packet checksum OK, handle it.
           byte_out = '+';
           byte_oe = true;
-          printf("\n"); // REMOVE THIS LATER
+          printf("\n"); // FIXME REMOVE THIS LATER
           handle_packet();
 
           // If handle_packet() changed next_state, don't change it again.
@@ -819,7 +819,6 @@ void GDBServer::update(bool connected, bool byte_ie, char byte_in, bool& byte_oe
     }
 
     case SEND_PREFIX: {
-      //printf("\n<< ");
       byte_out = '$';
       byte_oe = true;
       checksum = 0;
@@ -884,13 +883,13 @@ void GDBServer::update(bool connected, bool byte_ie, char byte_in, bool& byte_oe
           next_state = IDLE;
         }
         else if (byte_in == '-') {
-          printf("========================\n");
-          printf("========  NACK  ========\n");
-          printf("========================\n");
+          LOG_R("========================\n");
+          LOG_R("========  NACK  ========\n");
+          LOG_R("========================\n");
           next_state = SEND_PACKET;
         }
         else {
-          printf("garbage ack char %d '%c'\n", byte_in, byte_in);
+          LOG_R("garbage ack char %d '%c'\n", byte_in, byte_in);
         }
       }
       break;

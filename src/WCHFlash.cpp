@@ -235,7 +235,7 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* blob, int size) {
   LOG("WCHFlash::write_flash(0x%08x, 0x%08x, %d)\n", dst_addr, blob, size);
   unlock_flash();
 
-  if (size % 4) printf("WCHFlash::write_flash() - Bad size %d\n", size);
+  if (size % 4) LOG_R("WCHFlash::write_flash() - Bad size %d\n", size);
   int size_dwords = size / 4;
 
   dst_addr |= 0x08000000;
@@ -288,9 +288,7 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* blob, int size) {
   // Start feeding dwords to prog_write_flash.
 
   for (int page = 0; page < page_count; page++) {
-    //printf("!");
     for (int dword_idx = 0; dword_idx < 16; dword_idx++) {
-      //printf(".");
       int offset = (page * page_size) + (dword_idx * sizeof(uint32_t));
       uint32_t* src = (uint32_t*)((uint8_t*)blob + offset);
 
@@ -298,40 +296,34 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* blob, int size) {
       // write 0xDEADBEEF in the empty space.
       rvd->set_data0(dword_idx < size_dwords ? *src : 0xDEADBEEF);
 
-      rvd->run_prog_slow();
-      while (rvd->get_abstractcs().BUSY) {
-        //LOG("BUSY not cleared yet\n");
-      }
-
-#if 0
       if (first_word) {
         // There's a chip bug here - we can't set AUTOCMD before COMMAND or
         // things break all weird
 
-        rvd->run_prog_slow();
+        // This run_prog _must_ include a busywait
+        rvd->run_prog_slow(); 
         rvd->set_abstractauto(0x00000001);
         first_word = false;
       }
       else {
         // We can write flash slightly faster if we only busy-wait at the end
         // of each page, but I am wary...
-        while (rvd->get_abstractcs().BUSY) {
-          //LOG("BUSY not cleared yet\n");
-        }
+        // Waiting here takes 54443 us to write 564 bytes
+        while (rvd->get_abstractcs().BUSY) {}
       }
-#endif
     }
+    // This is the end of a page 
+    // Waiting here instead of the above takes 42847 us to write 564 bytes
+    //while (rvd->get_abstractcs().BUSY) {}
   }
 
   rvd->set_abstractauto(0x00000000);
   rvd->set_mem_u32(ADDR_FLASH_CTLR, 0);
 
-  {
-    // FIXME what was this for? why are we setting EOP?
-    auto statr = Reg_FLASH_STATR(rvd->get_mem_u32(ADDR_FLASH_STATR));
-    statr.EOP = 1;
-    rvd->set_mem_u32(ADDR_FLASH_STATR, statr);
-  }
+  // Write 1 to clear EOP. Not sure if we need to do this...
+  auto statr = Reg_FLASH_STATR(rvd->get_mem_u32(ADDR_FLASH_STATR));
+  statr.EOP = 1;
+  rvd->set_mem_u32(ADDR_FLASH_STATR, statr);
 
   LOG("WCHFlash::write_flash() done\n");
 }

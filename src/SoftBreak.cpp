@@ -154,7 +154,7 @@ bool SoftBreak::resume() {
     return true;
   }
   else {
-    //printf("Not resuming because we immediately hit a breakpoint at 0x%08x\n", dpc);
+    //LOG("Not resuming because we immediately hit a breakpoint at 0x%08x\n", dpc);
     halted = true;
     return false;
   }
@@ -173,15 +173,15 @@ int SoftBreak::set_breakpoint(uint32_t addr, int size) {
   CHECK(halted);
 
   if (size != 2 && size != 4) {
-    printf("SoftBreak::set_breakpoint - Bad breakpoint size %d\n", size);
+    LOG_R("SoftBreak::set_breakpoint - Bad breakpoint size %d\n", size);
     return -1;
   }
   if (addr >= 0x4000 - size) {
-    printf("SoftBreak::set_breakpoint - Address 0x%08x invalid\n", addr);
+    LOG_R("SoftBreak::set_breakpoint - Address 0x%08x invalid\n", addr);
     return -1;
   }
   if (addr & 1) {
-    printf("SoftBreak::set_breakpoint - Address 0x%08x invalid\n", addr);
+    LOG_R("SoftBreak::set_breakpoint - Address 0x%08x invalid\n", addr);
     return -1;
   }
 
@@ -191,13 +191,13 @@ int SoftBreak::set_breakpoint(uint32_t addr, int size) {
       bp_index = i;
     }
     if (breakpoints[i] == addr) {
-      printf("Breakpoint at 0x%08x already set\n", addr);
+      LOG_R("Breakpoint at 0x%08x already set\n", addr);
       return -1;
     }
   }
 
   if (bp_index == -1) {
-    printf("SoftBreak::set_breakpoint() - No valid slots left\n");
+    LOG_R("SoftBreak::set_breakpoint() - No valid slots left\n");
     return -1;
   }
 
@@ -237,15 +237,15 @@ int SoftBreak::clear_breakpoint(uint32_t addr, int size) {
   CHECK(halted);
 
   if (size != 2 && size != 4) {
-    printf("SoftBreak::set_breakpoint - Bad breakpoint size %d\n", size);
+    LOG_R("SoftBreak::set_breakpoint - Bad breakpoint size %d\n", size);
     return -1;
   }
   if (addr >= 0x4000 - size) {
-    printf("SoftBreak::clear_breakpoint - Address 0x%08x invalid\n", addr);
+    LOG_R("SoftBreak::clear_breakpoint - Address 0x%08x invalid\n", addr);
     return -1;
   }
   if (addr & 1) {
-    printf("SoftBreak::clear_breakpoint - Address 0x%08x invalid\n", addr);
+    LOG_R("SoftBreak::clear_breakpoint - Address 0x%08x invalid\n", addr);
     return -1;
   }
 
@@ -258,7 +258,7 @@ int SoftBreak::clear_breakpoint(uint32_t addr, int size) {
   }
 
   if (bp_index == -1) {
-    printf("SoftBreak::clear_breakpoint() - No breakpoint found at 0x%08x\n", addr);
+    LOG_R("SoftBreak::clear_breakpoint() - No breakpoint found at 0x%08x\n", addr);
     return -1;
   }
 
@@ -320,7 +320,7 @@ void SoftBreak::patch_flash() {
   for (int page = 0; page < page_count; page++) {
     if (!dirty_map[page]) continue;
 
-    //printf("patching page %d to have %d breakpoints\n", page, break_map[page]);
+    //LOG("patching page %d to have %d breakpoints\n", page, break_map[page]);
     int page_base = page * page_size;
     flash->wipe_page(page_base);
     flash->write_flash(page_base, flash_dirty + page_base, page_size);
@@ -339,7 +339,7 @@ void SoftBreak::unpatch_flash() {
   for (int page = 0; page < page_count; page++) {
     if (!flash_map[page]) continue;
 
-    //printf("unpatching page %d\n", page);
+    //LOG("unpatching page %d\n", page);
     int page_base = page * page_size;
     flash->wipe_page(page_base);
     flash->write_flash(page_base, flash_clean + page_base, page_size);

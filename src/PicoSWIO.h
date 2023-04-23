@@ -54,11 +54,7 @@ struct Reg_CPBR {
     uint32_t raw;
   };
 
-  void dump() {
-    printf("DM_CPBR = 0x%08x\n", raw);
-    printf("  TDIV:%d  SOPN:%d  CHECKSTA:%d  CMDEXTENSTA:%d  OUTSTA:%d  IOMODE:%d  VERSION:%d\n",
-      TDIV, SOPN, CHECKSTA, CMDEXTENSTA, OUTSTA, IOMODE, VERSION);
-  }
+  void dump();
 };
 static_assert(sizeof(Reg_CPBR) == 4);
 
@@ -84,11 +80,7 @@ struct Reg_CFGR {
     uint32_t raw;
   };
 
-  void dump() {
-    printf("DM_CFGR = 0x%08x\n", raw);
-    printf("  TDIVCFG:%d  SOPNCFG:%d  CHECKEN:%d  CMDEXTEN:%d  OUTEN:%d  IOMODECFG:%d  KEY:0x%04x\n",
-      TDIVCFG, SOPNCFG, CHECKEN, CMDEXTEN, OUTEN, IOMODECFG, KEY);
-  }
+  void dump();
 };
 static_assert(sizeof(Reg_CFGR) == 4);
 
@@ -114,11 +106,7 @@ struct Reg_SHDWCFGR {
     uint32_t raw;
   };
 
-  void dump() {
-    printf("DM_SHDWCFGR = 0x%08x\n", raw);
-    printf("  TDIVCFG:%d  SOPNCFG:%d  CHECKEN:%d  CMDEXTEN:%d  OUTEN:%d  IOMODECFG:%d  KEY:0x%04x\n",
-      TDIVCFG, SOPNCFG, CHECKEN, CMDEXTEN, OUTEN, IOMODECFG, KEY);
-  }
+  void dump();
 };
 static_assert(sizeof(Reg_SHDWCFGR) == 4);
 

@@ -109,9 +109,6 @@ int main() {
     console->update(ser_ie, ser_in);
   }
 
-  printf("halting\n");
-  while (1);
-
   return 0;
 }
 
