@@ -141,7 +141,7 @@ private:
   int reg_count;
 
   uint32_t prog_cache[8];
-  uint32_t run_prog_will_clobber = 0;
+  uint32_t prog_will_clobber = 0; // Bits are 1 if running the current program will clober the reg
 
 
   uint32_t reg_cache[32];

@@ -231,14 +231,12 @@ void WCHFlash::wipe_chip() {
 // good - 0x19e0006f
 // bad  - 0x00010040
 
-void WCHFlash::write_flash(uint32_t dst_addr, void* data, int size) {
-  LOG("WCHFlash::write_flash(0x%08x, 0x%08x, %d)\n", dst_addr, data, size);
+void WCHFlash::write_flash(uint32_t dst_addr, void* blob, int size) {
+  LOG("WCHFlash::write_flash(0x%08x, 0x%08x, %d)\n", dst_addr, blob, size);
   unlock_flash();
 
   if (size % 4) printf("WCHFlash::write_flash() - Bad size %d\n", size);
   int size_dwords = size / 4;
-
-  //printf("WCHFlash::write_flash 0x%08x 0x%08x %d\n", dst_addr, data, size);
 
   dst_addr |= 0x08000000;
 
@@ -294,7 +292,7 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* data, int size) {
     for (int dword_idx = 0; dword_idx < 16; dword_idx++) {
       //printf(".");
       int offset = (page * page_size) + (dword_idx * sizeof(uint32_t));
-      uint32_t* src = (uint32_t*)((uint8_t*)data + offset);
+      uint32_t* src = (uint32_t*)((uint8_t*)blob + offset);
 
       // We have to write full pages only, so if we run out of source data we
       // write 0xDEADBEEF in the empty space.
@@ -336,6 +334,31 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* data, int size) {
   }
 
   LOG("WCHFlash::write_flash() done\n");
+}
+
+//------------------------------------------------------------------------------
+
+bool WCHFlash::verify_flash(uint32_t dst_addr, void* blob, int size) {
+  LOG("WCHFlash::verify_flash(0x%08x, 0x%08x, %d)\n", dst_addr, blob, size);
+
+  dst_addr |= 0x08000000;
+
+  uint8_t* readback = new uint8_t[size];
+  rvd->get_block_aligned(dst_addr, readback, size);
+
+  uint8_t* data = (uint8_t*)blob;
+  bool mismatch = false;
+  for (int i = 0; i < size; i++) {
+    if (data[i] != readback[i]) {
+      LOG_R("Flash readback failed at address 0x%08x - want 0x%02x, got 0x%02x\n", dst_addr + i, data[i], readback[i]);
+      mismatch = true;
+    }
+  }
+
+  delete [] readback;
+
+  LOG("WCHFlash::verify_flash() done\n");
+  return !mismatch;
 }
 
 //------------------------------------------------------------------------------

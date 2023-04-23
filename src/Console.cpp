@@ -125,20 +125,11 @@ ConsoleHandler handlers[] = {
     [](Console& c) {
       const uint32_t base = 0x00000000;
       int len = blink_bin_len;
-      //int len = 4;
+      printf_b("Writing flash\n");
       c.flash->write_flash(base, blink_bin, len);
-
-      uint8_t* readback = new uint8_t[len];
-
-      c.rvd->get_block_aligned(base, readback, len);
-
-      for (int i = 0; i < len; i++) {
-        if (blink_bin[i] != readback[i]) {
-          LOG_R("Flash readback failed at address 0x%08x - want 0x%02x, got 0x%02x\n", base + i, blink_bin[i], readback[i]);
-        }
-      }
-
-      delete [] readback;
+      printf_b("Verifying flash\n");
+      c.flash->verify_flash(base, blink_bin, len);
+      printf_b("Done\n");
     }
   },
 

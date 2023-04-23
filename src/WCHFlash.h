@@ -27,7 +27,8 @@ struct WCHFlash {
   void wipe_chip();
 
   // Flash write, dest address must be aligned & size must be a multiple of 4
-  void write_flash(uint32_t dst_addr, void* data, int size);
+  void write_flash(uint32_t dst_addr, void* blob, int size);
+  bool verify_flash(uint32_t dst_addr, void* blob, int size);
 
   // Debug dump
   void dump();
