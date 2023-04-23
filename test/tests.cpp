@@ -8,7 +8,7 @@
 void run_tests(RVDebug& rvd) {
   printf("Running tests...\n");
 
-  rvd.halt();
+  rvd.reset();
   
   uint32_t base = 0x20000400;
 

@@ -13,6 +13,7 @@ public:
 
   GDBServer(RVDebug* rvd, WCHFlash* flash, SoftBreak* soft);
   void reset();
+  void dump();
 
   void update(bool connected, bool byte_ie, char byte_in, bool& byte_oe, char& byte_out);
 

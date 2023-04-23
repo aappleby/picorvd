@@ -15,24 +15,21 @@
 
 struct SoftBreak {
   SoftBreak(RVDebug* rvd, WCHFlash* flash);
-  void reset();
-  void update(); // Call this regularly to see if we've hit a breakpoint.
+  void init();
+  void dump();
 
   void halt();
-  void async_halted();
   bool resume();
-  void set_dpc(uint32_t pc);
-
-  void reset_cpu();
+  void reset();
   void step();
   bool is_halted();
+
+  void set_dpc(uint32_t pc);
 
   int  set_breakpoint(uint32_t addr, int size);
   int  clear_breakpoint(uint32_t addr, int size);
   void clear_all_breakpoints();
   bool has_breakpoint(uint32_t addr);
-
-  void dump();
 
   //----------------------------------------
 

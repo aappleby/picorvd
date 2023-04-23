@@ -5,7 +5,7 @@
 
 #include "utils.h"
 
-static const int breakpoint_max = 256;
+static const int breakpoint_max = 32;
 static const int page_size = 64;
 static const uint32_t BP_EMPTY = 0xDEADBEEF;
 
@@ -30,7 +30,7 @@ SoftBreak::SoftBreak(RVDebug* rvd, WCHFlash* flash) : rvd(rvd), flash(flash) {
 
 //------------------------------------------------------------------------------
 
-void SoftBreak::reset() {
+void SoftBreak::init() {
   breakpoint_count = 0;
   for (int i = 0; i < breakpoint_max; i++) {
     breakpoints[i] = BP_EMPTY;
@@ -38,15 +38,84 @@ void SoftBreak::reset() {
 
   // FIXME - Do we want to grab a full copy of target flash here? It would save
   // us some bookkeeping later, at the cost of a slightly slower startup.
-  memset(flash_dirty, 0, sizeof(flash_dirty));
-  memset(flash_clean, 0, sizeof(flash_clean));
+  int flash_size = flash->get_flash_size();
+  memset(flash_dirty, 0, flash_size);
+  memset(flash_clean, 0, flash_size);
 
-  memset(break_map, 0, sizeof(break_map));
-  memset(flash_map, 0, sizeof(flash_map));
-  memset(dirty_map, 0, sizeof(dirty_map));
+  int page_count = flash->get_page_count();
+  memset(break_map, 0, page_count);
+  memset(flash_map, 0, page_count);
+  memset(dirty_map, 0, page_count);
 
   halted = rvd->get_dmstatus().ALLHALTED;
 }
+
+//------------------------------------------------------------------------------
+
+void SoftBreak::dump() {
+  int flash_size = flash->get_flash_size();
+  int page_count = flash->get_page_count();
+
+  printf_b("status\n");
+  printf("  halted %d\n", halted);
+  printf("  DPC 0x%08x\n", rvd->get_dpc());
+  printf("  breakpoint_count %d\n");
+
+  printf_b("breakpoints\n");
+  for (int y = 0; y < (breakpoint_max / 8); y++) {
+    for (int x = 0; x < 8; x++) {
+      printf("  0x%08x", breakpoints[x + y * 8]);
+    }
+    printf("\n");
+  }
+
+  printf_b("break_map\n");
+  for (int y = 0; y < (page_count / 32); y++) {
+    printf("  ");
+    for (int x = 0; x < 32; x++) {
+      printf("%02d ", break_map[x + y * 32]);
+    }
+    printf("\n");
+  }
+
+  printf_b("flash_map\n");
+  for (int y = 0; y < (page_count / 32); y++) {
+    printf("  ");
+    for (int x = 0; x < 32; x++) {
+      printf("%02d ", flash_map[x + y * 32]);
+    }
+    printf("\n");
+  }
+
+  printf_b("dirty_map\n");
+  for (int y = 0; y < (page_count / 32); y++) {
+    printf("  ");
+    for (int x = 0; x < 32; x++) {
+      printf("%02d ", dirty_map[x + y * 32]);
+    }
+    printf("\n");
+  }
+
+
+#if 0
+  RVDebug* rvd;
+  WCHFlash* flash;
+
+  bool halted;
+
+  int breakpoint_count;
+  uint32_t* breakpoints;
+
+  uint8_t*  flash_clean; // Buffer for cached flash contents.
+  uint8_t*  flash_dirty; // Buffer for cached flash contents w/ breakpoints inserted
+
+  uint8_t*  break_map; // Number of breakpoints set, per page
+  uint8_t*  flash_map; // Number of breakpoints written to device flash, per page.
+  uint8_t*  dirty_map; // Nonzero if the flash page does not match our flash_dirty copy.
+#endif
+
+}
+
 
 //------------------------------------------------------------------------------
 
@@ -96,7 +165,7 @@ bool SoftBreak::resume() {
 void SoftBreak::set_dpc(uint32_t pc) { rvd->set_dpc(pc); }
 void SoftBreak::step()           { rvd->step(); }
 bool SoftBreak::is_halted()      { return halted; }
-void SoftBreak::reset_cpu()      { rvd->reset_cpu(); }
+void SoftBreak::reset()      { rvd->reset(); }
 
 //------------------------------------------------------------------------------
 
@@ -239,17 +308,6 @@ bool SoftBreak::has_breakpoint(uint32_t addr) {
     if (breakpoints[i] == addr) return true;
   }
   return false;
-}
-
-//------------------------------------------------------------------------------
-
-void SoftBreak::dump() {
-  printf("Breakpoints:\n");
-  for (int i = 0; i < breakpoint_max; i++) {
-    if (breakpoints[i] != BP_EMPTY) {
-      printf("%03d: 0x%08x\n", i, breakpoints[i]);
-    }
-  }
 }
 
 //------------------------------------------------------------------------------

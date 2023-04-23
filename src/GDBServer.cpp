@@ -46,6 +46,9 @@ void GDBServer::reset() {
   for (int i = 0; i < flash->get_page_size(); i++) this->page_cache[i] = 0xFF;
 }
 
+void GDBServer::dump() {
+}
+
 //------------------------------------------------------------------------------
 /*
 At a minimum, a stub is required to support the ‘?’ command to tell GDB the
@@ -398,7 +401,7 @@ void GDBServer::handle_q() {
 
     // reset in hex
     if (recv.match_prefix_hex("reset")) {
-      soft->reset_cpu();
+      soft->reset();
       send.set_packet("OK");
     }
   }
@@ -475,7 +478,7 @@ void GDBServer::handle_v() {
   else if (recv.match_prefix("vKill")) {
     // FIXME should reset cpu or something?
     recv.cursor2 = recv.buf + recv.size;
-    soft->reset_cpu();
+    soft->reset();
     send.set_packet("OK");
   }
   else if (recv.match_prefix("vMustReplyEmpty")) {

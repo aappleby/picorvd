@@ -5,6 +5,29 @@
 using putter = void (*)(char);
 using getter = char (*)();
 
+//------------------------------------------------------------------------------
+
+void printf_color(const char* color, const char* fmt, ...);
+
+#define LOG_R(...) printf_color("1;31", __VA_ARGS__)
+#define LOG_G(...) printf_color("1;32", __VA_ARGS__)
+#define LOG_Y(...) printf_color("1;33", __VA_ARGS__)
+#define LOG_B(...) printf_color("1;34", __VA_ARGS__)
+#define LOG_M(...) printf_color("1;35", __VA_ARGS__)
+#define LOG_C(...) printf_color("1;36", __VA_ARGS__)
+#define LOG_W(...) printf_color("1;37", __VA_ARGS__)
+#define LOG(...)   printf(__VA_ARGS__)
+
+#define printf_r(...) printf_color("1;31", __VA_ARGS__)
+#define printf_g(...) printf_color("1;32", __VA_ARGS__)
+#define printf_y(...) printf_color("1;33", __VA_ARGS__)
+#define printf_b(...) printf_color("1;34", __VA_ARGS__)
+#define printf_m(...) printf_color("1;35", __VA_ARGS__)
+#define printf_c(...) printf_color("1;36", __VA_ARGS__)
+#define printf_w(...) printf_color("1;37", __VA_ARGS__)
+
+//------------------------------------------------------------------------------
+
 char to_hex(int x);
 int from_hex(char c);
 int cmp(const char* prefix, const char* text);
@@ -27,22 +50,21 @@ char* atox(char* cursor, int& out);
   } \
 }
 
-template<typename T>
-void set_bit(T* base, int i, bool b) {
-  int block = i / (sizeof(T) * 8);
-  int index = i % (sizeof(T) * 8);
-  base[block] &= ~(1 << index);
-  base[block] |=  (b << index);
+inline void set_bit(void* blob, int i, bool b) {
+  uint8_t* base = (uint8_t*)blob;
+  base[i >> 3] &= ~(1 << (i & 7));
+  base[i >> 3] |=  (b << (i & 7));
+}
+
+inline bool get_bit(void* blob, int i) {
+  uint8_t* base = (uint8_t*)blob;
+  return (base[i >> 3] >> (i & 7)) & 1;
 }
 
 template<typename T>
-bool get_bit(T* base, int i) {
-  int block = i / (sizeof(T) * 8);
-  int index = i % (sizeof(T) * 8);
-  return (base[block] >> index) & 1;
+bool bit(T& t, int i) {
+  return get_bit(&t, i);
 }
-
-
 
 template<typename R, typename E>
 struct Result {

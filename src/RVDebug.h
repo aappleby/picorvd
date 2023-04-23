@@ -34,8 +34,30 @@ struct Csr_DCSR;
 //------------------------------------------------------------------------------
 
 struct RVDebug {
-  RVDebug(Bus* dmi);
-  void reset();
+  RVDebug(Bus* dmi, int reg_count);
+  ~RVDebug();
+  void init();
+  void dump();
+
+  //----------
+  // CPU control
+
+  bool halt();
+  bool resume();
+  bool step();
+
+  bool reset();
+  bool clear_err();
+  bool sanity();
+  bool enable_breakpoints();
+
+  //----------
+  // Run small (32 byte on CH32V003) programs from the debug program buffer
+
+  void load_prog(const char* name, uint32_t* prog, uint32_t clobbers);
+  void run_prog(bool wait_until_not_busy);
+  void run_prog_slow() { run_prog(true); }
+  void run_prog_fast() { run_prog(false); }
 
   //----------
   // Debug module register access
@@ -77,7 +99,7 @@ struct RVDebug {
   //----------
   // CPU register access
 
-  int get_gpr_count() { return 16; } // FIXME yeah hardcoded
+  int      get_gpr_count() { return reg_count; }
   uint32_t get_gpr(int index);
   void     set_gpr(int index, uint32_t gpr);
 
@@ -107,21 +129,6 @@ struct RVDebug {
   void set_block_aligned  (uint32_t addr, void* data, int size);
   void set_block_unaligned(uint32_t addr, void* data, int size);
 
-  //----------
-
-  void load_prog(const char* name, uint32_t* prog, uint32_t dirty_regs);
-  void run_prog_slow();
-  void run_prog_fast();
-
-  void halt();
-  void resume();
-  void step();
-
-  void reset_cpu();
-  void clear_err();
-  bool sanity();
-  void dump();
-
 private:
 
   uint32_t get_mem_u32_aligned(uint32_t addr);
@@ -131,11 +138,15 @@ private:
   Bus* dmi;
 
   // Cached target state, must stay in sync
-  int      reg_count = 16;
+  int reg_count;
+
   uint32_t prog_cache[8];
+  uint32_t run_prog_will_clobber = 0;
+
+
   uint32_t reg_cache[32];
-  uint32_t dirty_regs = 0; // bits are 1 if we modified the reg on device
-  uint32_t clean_regs = 0; // bits are 1 if reg_cache[i] is valid
+  uint32_t dirty_regs = 0;  // bits are 1 if we modified the reg on device
+  uint32_t cached_regs = 0; // bits are 1 if reg_cache[i] is valid
 };
 
 //------------------------------------------------------------------------------

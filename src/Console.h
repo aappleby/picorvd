@@ -8,6 +8,8 @@ struct SoftBreak;
 struct Console {
   Console(RVDebug* rvd, WCHFlash* flash, SoftBreak* soft);
   void reset();
+  void dump();
+  void start();
 
   void update(bool ser_ie, char ser_in);
   void dispatch_command();

@@ -4,16 +4,12 @@
 
 //------------------------------------------------------------------------------
 
-void vprint_to(putter p, const char* fmt, va_list args) {
-  char buffer[256];
-  int len = vsnprintf(buffer, 256, fmt, args);
-  for (int i = 0; i < len; i++) p(buffer[i]);
-}
-
-void print_to(putter p, const char* fmt, ...) {
+void printf_color(const char* color, const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
-  vprint_to(p, fmt, args);
+  printf("\u001b[%sm", color);
+  vprintf(fmt, args);
+  printf("\u001b[0m");
 }
 
 //------------------------------------------------------------------------------

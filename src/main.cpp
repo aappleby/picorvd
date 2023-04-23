@@ -10,11 +10,17 @@
 #include "Console.h"
 #include "GDBServer.h"  
 #include "debug_defines.h"
+#include "utils.h"
 
 const int PIN_SWIO = 28;
 const int PIN_UART_TX = 0;
 const int PIN_UART_RX = 1;
 const int ch32v003_flash_size = 16*1024;
+
+void delay_us(int us) {
+  auto now = time_us_32();
+  while(time_us_32() < (now + us));
+}
 
 //------------------------------------------------------------------------------
 
@@ -22,44 +28,53 @@ int main() {
   // Enable non-USB serial port on gpio 0/1 for meta-debug output :D
   stdio_uart_init_full(uart0, 1000000, PIN_UART_TX, PIN_UART_RX);
 
-  printf("\n\n\n");
-  printf("//==============================================================================\n");
-  printf("// PicoDebug 0.0.2\n");
+  LOG_G("\n\n\n");
+  LOG_G("//==============================================================================\n");
+  LOG_G("// PicoRVD 0.0.2\n\n");
 
-  printf("// Starting PicoSWIO\n");
+  LOG_G("// Starting PicoSWIO\n");
   PicoSWIO* swio = new PicoSWIO();
   swio->reset(PIN_SWIO);
 
-  printf("// Starting RVDebug\n");
-  RVDebug* rvd = new RVDebug(swio);
-  rvd->reset();
+  LOG_G("// Starting RVDebug\n");
+  RVDebug* rvd = new RVDebug(swio, 16);
+  rvd->init();
+  //rvd->dump();
 
-  printf("// Starting WCHFlash\n");
+  LOG_G("// Starting WCHFlash\n");
   WCHFlash* flash = new WCHFlash(rvd, ch32v003_flash_size);
   flash->reset();
+  //flash->dump();
 
-  printf("// Starting SoftBreak\n");
+  LOG_G("// Starting SoftBreak\n");
   SoftBreak* soft = new SoftBreak(rvd, flash);
-  soft->reset();
+  soft->init();
+  //soft->dump();
 
-  printf("// Starting GDBServer\n");
+  LOG_G("// Starting GDBServer\n");
   GDBServer* gdb = new GDBServer(rvd, flash, soft);
   gdb->reset();
+  //gdb->dump();
 
-  printf("// Starting USB\n");
-  tud_init(BOARD_TUD_RHPORT);
-
-  printf("// Starting Console\n");
+  LOG_G("// Starting Console\n");
   Console* console = new Console(rvd, flash, soft);
-
-  printf("// Everything up and running!\n");
-
   console->reset();
+  //console->dump();
 
+  LOG_G("// Everything up and running!\n");
+
+  console->start();
   while (1) {
+
+#if 0
     //----------------------------------------
     // Update TinyUSB
 
+    static bool tud_init = false;
+    if (!tud_init) {
+      tud_init(BOARD_TUD_RHPORT);
+      tud_init = true;
+    }
     tud_task();
 
     //----------------------------------------
@@ -80,6 +95,7 @@ int main() {
       tud_cdc_n_write(0, &usb_out, 1);
       tud_cdc_n_write_flush(0);
     }
+#endif
 
     //----------------------------------------
     // Update uart console
@@ -93,6 +109,8 @@ int main() {
     console->update(ser_ie, ser_in);
   }
 
+  printf("halting\n");
+  while (1);
 
   return 0;
 }

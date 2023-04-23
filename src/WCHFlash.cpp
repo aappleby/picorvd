@@ -37,7 +37,8 @@ struct Reg_FLASH_ACTLR {
   };
 
   void dump() {
-    printf("Reg_FLASH_ACTLR = 0x%08x\n", raw);
+    printf_b("FLASH_ACTLR");
+    printf(" = 0x%08x\n", raw);
     printf("  LATENCY:%d\n",
       LATENCY);
   }
@@ -65,7 +66,8 @@ struct Reg_FLASH_STATR {
   };
 
   void dump() {
-    printf("Reg_FLASH_STATR = 0x%08x\n", raw);
+    printf_b("FLASH_STATR");
+    printf(" = 0x%08x\n", raw);
     printf("  BUSY:%d  WRPRTERR:%d  EOP:%d  MODE:%d  BOOT_LOCK:%d\n",
       BUSY, WRPRTERR, EOP, MODE, BOOT_LOCK);
   }
@@ -123,7 +125,8 @@ struct Reg_FLASH_CTLR {
   };
 
   void dump() {
-    printf("Reg_FLASH_CTLR = 0x%08x\n", raw);
+    printf_b("FLASH_CTLR");
+    printf(" = 0x%08x\n", raw);
     printf("  PG:%d  PER:%d  MER:%d  OBG:%d  OBER:%d  STRT:%d  LOCK:%d\n",
       PG, PER, MER, OBG, OBER, STRT, LOCK);
     printf("  OBWRE:%d  ERRIE:%d  EOPIE:%d  FLOCK:%d  FTPG:%d  FTER:%d  BUFLOAD:%d  BUFRST:%d\n",
@@ -155,7 +158,8 @@ struct Reg_FLASH_OBR {
   };
 
   void dump() {
-    printf("Reg_FLASH_OBR = 0x%08x\n", raw);
+    printf_b("FLASH_OBR");
+    printf(" = 0x%08x\n", raw);
     printf("  OBERR:%d  RDPRT:%d  IWDG_SW:%d  STANDBY_RST:%d  CFGRSTT:%d  DATA0:%d  DATA1:%d\n",
       OBERR, RDPRT, IWDG_SW, STANDBY_RST, CFGRSTT, DATA0, DATA1);
   }
@@ -177,20 +181,23 @@ void WCHFlash::lock_flash() {
   ctlr.FLOCK = true;
   rvd->set_mem_u32(ADDR_FLASH_CTLR, ctlr);
 
-  CHECK(Reg_FLASH_CTLR(rvd->get_mem_u32(ADDR_FLASH_CTLR)).LOCK);
-  CHECK(Reg_FLASH_CTLR(rvd->get_mem_u32(ADDR_FLASH_CTLR)).FLOCK);
+  CHECK(Reg_FLASH_CTLR(rvd->get_mem_u32(ADDR_FLASH_CTLR)).LOCK, "Flash did not lock!");
+  CHECK(Reg_FLASH_CTLR(rvd->get_mem_u32(ADDR_FLASH_CTLR)).FLOCK, "Flash did not lock fast mode!");
 }
 
 //------------------------------------------------------------------------------
 
+void delay_us(int us);
+
 void WCHFlash::unlock_flash() {
   rvd->set_mem_u32(ADDR_FLASH_KEYR,  0x45670123);
   rvd->set_mem_u32(ADDR_FLASH_KEYR,  0xCDEF89AB);
+
   rvd->set_mem_u32(ADDR_FLASH_MKEYR, 0x45670123);
   rvd->set_mem_u32(ADDR_FLASH_MKEYR, 0xCDEF89AB);
 
-  CHECK(!Reg_FLASH_CTLR(rvd->get_mem_u32(ADDR_FLASH_CTLR)).LOCK);
-  CHECK(!Reg_FLASH_CTLR(rvd->get_mem_u32(ADDR_FLASH_CTLR)).FLOCK);
+  //CHECK(!Reg_FLASH_CTLR(rvd->get_mem_u32(ADDR_FLASH_CTLR)).LOCK, "Flash did not unlock!");
+  //CHECK(!Reg_FLASH_CTLR(rvd->get_mem_u32(ADDR_FLASH_CTLR)).FLOCK, "Flash did not unlock fast mode!");
 }
 
 //------------------------------------------------------------------------------
@@ -219,7 +226,13 @@ void WCHFlash::wipe_chip() {
 // the buffer fills. This avoids needing an on-chip buffer at the cost of having
 // to do some assembly programming in the debug module.
 
+// FIXME somehow the first write after debugger restart fails on the first word...
+
+// good - 0x19e0006f
+// bad  - 0x00010040
+
 void WCHFlash::write_flash(uint32_t dst_addr, void* data, int size) {
+  LOG("WCHFlash::write_flash(0x%08x, 0x%08x, %d)\n", dst_addr, data, size);
   unlock_flash();
 
   if (size % 4) printf("WCHFlash::write_flash() - Bad size %d\n", size);
@@ -287,6 +300,12 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* data, int size) {
       // write 0xDEADBEEF in the empty space.
       rvd->set_data0(dword_idx < size_dwords ? *src : 0xDEADBEEF);
 
+      rvd->run_prog_slow();
+      while (rvd->get_abstractcs().BUSY) {
+        //LOG("BUSY not cleared yet\n");
+      }
+
+#if 0
       if (first_word) {
         // There's a chip bug here - we can't set AUTOCMD before COMMAND or
         // things break all weird
@@ -298,9 +317,11 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* data, int size) {
       else {
         // We can write flash slightly faster if we only busy-wait at the end
         // of each page, but I am wary...
-        while (rvd->get_abstractcs().BUSY);
+        while (rvd->get_abstractcs().BUSY) {
+          //LOG("BUSY not cleared yet\n");
+        }
       }
-
+#endif
     }
   }
 
@@ -313,28 +334,70 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* data, int size) {
     statr.EOP = 1;
     rvd->set_mem_u32(ADDR_FLASH_STATR, statr);
   }
+
+  LOG("WCHFlash::write_flash() done\n");
 }
 
 //------------------------------------------------------------------------------
 // Dumps flash regs and the first 1K of flash.
 
-void WCHFlash::dump() {
-  Reg_FLASH_STATR(rvd->get_mem_u32(ADDR_FLASH_STATR)).dump();
-  Reg_FLASH_CTLR(rvd->get_mem_u32(ADDR_FLASH_CTLR)).dump();
-  Reg_FLASH_OBR(rvd->get_mem_u32(ADDR_FLASH_OBR)).dump();
-  printf("flash_wpr 0x%08x\n", rvd->get_mem_u32(ADDR_FLASH_WPR));
+/*
+const uint32_t ADDR_FLASH_ACTLR  = 0x40022000;
+const uint32_t ADDR_FLASH_KEYR   = 0x40022004;
+const uint32_t ADDR_FLASH_OBKEYR = 0x40022008;
+ const uint32_t ADDR_FLASH_STATR  = 0x4002200C;
+ const uint32_t ADDR_FLASH_CTLR   = 0x40022010;
+ const uint32_t ADDR_FLASH_ADDR   = 0x40022014;
+ const uint32_t ADDR_FLASH_OBR    = 0x4002201C;
+ const uint32_t ADDR_FLASH_WPR    = 0x40022020;
+ const uint32_t ADDR_FLASH_MKEYR  = 0x40022024;
+ const uint32_t ADDR_FLASH_BKEYR  = 0x40022028;
+*/
 
+void WCHFlash::dump() {
+
+  printf_b("FLASH_ACTLR\n");
+  printf("  0x%08x\n", rvd->get_mem_u32(ADDR_FLASH_ACTLR));
+
+  printf_b("FLASH_KEYR\n");
+  printf("  0x%08x\n", rvd->get_mem_u32(ADDR_FLASH_KEYR));
+
+  printf_b("FLASH_OBKEYR\n");
+  printf("  0x%08x\n", rvd->get_mem_u32(ADDR_FLASH_OBKEYR));
+
+  Reg_FLASH_STATR(rvd->get_mem_u32(ADDR_FLASH_STATR)).dump();
+
+  Reg_FLASH_CTLR(rvd->get_mem_u32(ADDR_FLASH_CTLR)).dump();
+
+  printf_b("FLASH_ADDR\n");
+  printf("  0x%08x\n", rvd->get_mem_u32(ADDR_FLASH_ADDR));
+
+  Reg_FLASH_OBR(rvd->get_mem_u32(ADDR_FLASH_OBR)).dump();
+
+  printf_b("FLASH_WPR\n");
+  printf("  0x%08x\n", rvd->get_mem_u32(ADDR_FLASH_WPR));
+
+  printf_b("FLASH_MKEYR\n");
+  printf("  0x%08x\n", rvd->get_mem_u32(ADDR_FLASH_MKEYR));
+
+  printf_b("FLASH_BKEYR\n");
+  printf("  0x%08x\n", rvd->get_mem_u32(ADDR_FLASH_BKEYR));
+
+  /*
   int lines = flash_size / 32;
-  if (lines > 32) lines = 32;
+  if (lines > 24) lines = 24;
+  uint32_t base = 0x08000000;
+  printf_b("flash dump @ [0x%08x,0x%08x]\n", base, base + (lines * 8 * 4) - 1);
 
   for (int y = 0; y < lines; y++) {
     uint32_t temp[8];
-    rvd->get_block_aligned(y * 32, temp, 32);
+    rvd->get_block_aligned(base + y * 32, temp, 32);
     for (int x = 0; x < 8; x++) {
-      printf("0x%08x ", temp[x]);
+      printf("  0x%08x", temp[x]);
     }
     printf("\n");
   }
+  */
 }
 
 //------------------------------------------------------------------------------

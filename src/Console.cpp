@@ -19,7 +19,13 @@ Console::Console(RVDebug* rvd, WCHFlash* flash, SoftBreak* soft) {
 }
 
 void Console::reset() {
-  printf("\n>> ");
+}
+
+void Console::dump() {
+}
+
+void Console::start() {
+  printf_y("\n>> ");
 }
 
 //------------------------------------------------------------------------------
@@ -30,23 +36,65 @@ struct ConsoleHandler {
 };
 
 ConsoleHandler handlers[] = {
-  //{ "run_tests",     [](Console& c) { run_tests(*c.sl);       } },
-
-  { "status",        [](Console& c) { c.rvd->dump();         } },
-  //{ "reset_dbg",     [](Console& c) { c.rvd->reset_dbg();      } },
-  { "reset_cpu",     [](Console& c) { c.rvd->reset_cpu();      } },
-
-  { "resume",        [](Console& c) { c.soft->resume();         } },
-  { "step",          [](Console& c) { c.soft->step();           } },
-  { "halt",          [](Console& c) { c.soft->halt(); printf("Halted at DPC = 0x%08x\n", c.rvd->get_dpc()); } },
-
-  { "lock_flash",    [](Console& c) { c.flash->lock_flash();     } },
-  { "unlock_flash",  [](Console& c) { c.flash->unlock_flash();   } },
-  { "wipe_chip",     [](Console& c) { c.flash->wipe_chip();      } },
-  { "write_flash",   [](Console& c) { c.flash->write_flash(0x00000000, blink_bin, blink_bin_len); } },
+  { "run_tests", [](Console& c) { run_tests(*c.rvd); } },
 
   {
-    "dump_addr",
+    "status",
+    [](Console& c) {
+      c.rvd->dump();
+    }
+  },
+
+  {
+    "reset",
+    [](Console& c) {
+      if (c.rvd->reset()) {
+        printf_g("Reset OK\n");
+      }
+      else {
+        printf_r("Reset failed\n");
+      }
+    }
+  },
+
+  {
+    "halt",
+    [](Console& c) {
+      if (c.rvd->halt()) {
+        printf_g("Halted at DPC = 0x%08x\n", c.rvd->get_dpc());
+      }
+      else {
+        printf_r("Halt failed\n");
+      }
+    }
+  },
+
+  {
+    "resume",
+    [](Console& c) {
+      if (c.rvd->resume()) {
+        printf_g("Resume OK\n");
+      }
+      else {
+        printf_g("Resume failed\n");
+      }
+    }
+  },
+  
+  {
+    "step",
+    [](Console& c) {
+      if (c.rvd->step()) {
+        printf_g("Stepped to DPC = 0x%08x\n", c.rvd->get_dpc());
+      }
+      else {
+        printf_r("Step failed\n");
+      }
+    }
+  },
+
+  {
+    "dump",
     [](Console& c) {
       auto addr = c.packet.take_int().ok_or(0x08000000);
       printf("addr 0x%08x\n", addr);
@@ -67,6 +115,45 @@ ConsoleHandler handlers[] = {
     }
   },
 
+  { "lock_flash",    [](Console& c) { c.flash->lock_flash();     } },
+  { "unlock_flash",  [](Console& c) { c.flash->unlock_flash();   } },
+  { "wipe_chip",     [](Console& c) { c.flash->wipe_chip();      } },
+  { "flash_status",  [](Console& c) { c.flash->dump(); } },
+
+  {
+    "write_flash",
+    [](Console& c) {
+      const uint32_t base = 0x00000000;
+      int len = blink_bin_len;
+      //int len = 4;
+      c.flash->write_flash(base, blink_bin, len);
+
+      uint8_t* readback = new uint8_t[len];
+
+      c.rvd->get_block_aligned(base, readback, len);
+
+      for (int i = 0; i < len; i++) {
+        if (blink_bin[i] != readback[i]) {
+          LOG_R("Flash readback failed at address 0x%08x - want 0x%02x, got 0x%02x\n", base + i, blink_bin[i], readback[i]);
+        }
+      }
+
+      delete [] readback;
+    }
+  },
+
+#if 0
+  { "soft_halt",   [](Console& c) { c.soft->halt(); printf("Halted at DPC = 0x%08x\n", c.rvd->get_dpc()); } },
+  { "soft_resume", [](Console& c) { c.soft->resume();         } },
+  { "soft_step",   [](Console& c) { c.soft->step();           } },
+
+  {
+    "dump_bp",
+    [](Console& c) {
+      c.soft->dump();
+    }
+  },
+
   {
     "set_bp",
     [](Console& c) {
@@ -83,28 +170,9 @@ ConsoleHandler handlers[] = {
     }
   },
 
-  {
-    "dump_bp",
-    [](Console& c) {
-      c.soft->dump();
-    }
-  },
-
-  /*
-  {
-    "patch_flash",
-    [](Console& c) {
-      c.soft->patch_flash();
-    }
-  },
-
-  {
-    "unpatch_flash",
-    [](Console& c) {
-      c.soft->unpatch_flash();
-    }
-  },
-  */
+  { "patch_flash",   [](Console& c) { c.soft->patch_flash(); } },
+  { "unpatch_flash", [](Console& c) { c.soft->unpatch_flash(); } },
+#endif
 };
 
 static const int handler_count = sizeof(handlers) / sizeof(handlers[0]);
@@ -119,7 +187,7 @@ void Console::dispatch_command() {
       return;
     }
   }
-  printf("Command %s not handled\n", packet.buf);
+  printf_r("Command %s not handled\n", packet.buf);
 }
 
 //------------------------------------------------------------------------------
@@ -145,13 +213,11 @@ void Console::update(bool ser_ie, char ser_in) {
 
       printf("Command took %d us\n", time_b - time_a);
       if ((packet.cursor2 - packet.buf) < packet.size) {
-        printf("Leftover text in packet - {%s}\n", packet.cursor2);
-        printf("%d\n", (packet.cursor2 - packet.buf));
-        printf("%d\n", packet.size);
+        printf_r("Leftover text in packet - {%s}\n", packet.cursor2);
       }
 
       packet.clear();
-      printf(">> ");
+      printf_y(">> ");
     }
     else {
       printf("%c", ser_in);

@@ -55,7 +55,7 @@ struct Reg_CPBR {
   };
 
   void dump() {
-    printf("Reg_CPBR = 0x%08x\n", raw);
+    printf("DM_CPBR = 0x%08x\n", raw);
     printf("  TDIV:%d  SOPN:%d  CHECKSTA:%d  CMDEXTENSTA:%d  OUTSTA:%d  IOMODE:%d  VERSION:%d\n",
       TDIV, SOPN, CHECKSTA, CMDEXTENSTA, OUTSTA, IOMODE, VERSION);
   }
@@ -85,7 +85,7 @@ struct Reg_CFGR {
   };
 
   void dump() {
-    printf("Reg_CFGR = 0x%08x\n", raw);
+    printf("DM_CFGR = 0x%08x\n", raw);
     printf("  TDIVCFG:%d  SOPNCFG:%d  CHECKEN:%d  CMDEXTEN:%d  OUTEN:%d  IOMODECFG:%d  KEY:0x%04x\n",
       TDIVCFG, SOPNCFG, CHECKEN, CMDEXTEN, OUTEN, IOMODECFG, KEY);
   }
@@ -115,7 +115,7 @@ struct Reg_SHDWCFGR {
   };
 
   void dump() {
-    printf("Reg_SHDWCFGR = 0x%08x\n", raw);
+    printf("DM_SHDWCFGR = 0x%08x\n", raw);
     printf("  TDIVCFG:%d  SOPNCFG:%d  CHECKEN:%d  CMDEXTEN:%d  OUTEN:%d  IOMODECFG:%d  KEY:0x%04x\n",
       TDIVCFG, SOPNCFG, CHECKEN, CMDEXTEN, OUTEN, IOMODECFG, KEY);
   }

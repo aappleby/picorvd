@@ -1,59 +1,144 @@
 #include "RVDebug.h"
-//#include <string.h>
 #include <stdio.h>
 
 #include "debug_defines.h"
 #include "utils.h"
 
-#if 0
-  // If we attach while running, resume.
-  //if (!halted) {
-  //  wire.resume();
-  //}
-
-  /*
-  if (halted) {
-    const char* halt_cause[] = {
-      "<not halted>",
-      "ebreak",
-      "trigger",
-      "halt request",
-      "step",
-      "halt on reset",
-      "<invalid6>",
-      "<invalid7>",
-    };
-    printf("SoftBreak::attach() - CPU is halted, cause = %s\n", halt_cause[dcsr_on_attach.CAUSE]);
-  }
-  else {
-    printf("SoftBreak::attach() - CPU is running\n");
-  }
-  */
-#endif
-
 //------------------------------------------------------------------------------
 
-RVDebug::RVDebug(Bus *dmi) : dmi(dmi) {}
+RVDebug::RVDebug(Bus *dmi, int reg_count) : dmi(dmi) {
+  this->reg_count = reg_count;
+  init();
+}
 
-//------------------------------------------------------------------------------
+//----------------------------------------
 
-void RVDebug::reset() {
-  // Reset cached state
+RVDebug::~RVDebug() {
+}
+
+void RVDebug::init() {
   for (int i = 0; i < 8; i++) {
     prog_cache[i] = 0xDEADBEEF;
   }
-  for (int i = 0; i < reg_count; i++) {
+  for (int i = 0; i < 32; i++) {
     reg_cache[i] = 0xDEADBEEF;
   }
   dirty_regs = 0;
-  clean_regs = 0;
+  cached_regs = 0;
+}
 
-  // Halt momentarily if needed so we can enable breakpoints in DCSR
-  bool was_halted = get_dmstatus().ALLHALTED;
-  if (!was_halted) {
-    halt();
+//------------------------------------------------------------------------------
+
+bool RVDebug::halt() {
+  LOG("RVDebug::halt()\n");
+
+  set_dmcontrol(0x80000001);
+  while(!get_dmstatus().ALLHALTED) {
+    LOG("ALLHALTED not set yet\n");
   }
-  
+  set_dmcontrol(0x00000001);      
+
+  LOG("RVDebug::halt() done\n");
+  return true;
+}
+
+//------------------------------------------------------------------------------
+
+bool RVDebug::resume() {
+  LOG("RVDebug::resume()\n");
+
+  if (get_dmstatus().ALLHAVERESET) {
+    LOG("RVDebug::resume() - Can't resume while in reset!\n");
+    return false;
+  }
+
+  reload_regs();
+  set_dmcontrol(0x40000001);
+
+  // FIXME wat wat wat wat
+  /*
+  while (!get_dmstatus().ALLRESUMEACK) {
+    LOG("ALLRESUMEACK not set yet\n");
+  }
+  */
+  set_dmcontrol(0x00000001);
+  cached_regs = 0;
+
+  LOG("RVDebug::resume() done\n");
+  return true;
+}
+
+//------------------------------------------------------------------------------
+
+bool RVDebug::step() {
+  LOG("RVDebug::step()\n");
+
+  if (get_dmstatus().ALLHAVERESET) {
+    LOG("RVDebug::step() - Can't step while in reset!\n");
+    return false;
+  }
+
+  Csr_DCSR dcsr = get_dcsr();
+  dcsr.STEP = 1;
+  set_dcsr(dcsr);
+  resume();
+  dcsr.STEP = 0;
+  set_dcsr(dcsr);
+
+  LOG("RVDebug::step() done\n");
+
+  return true;
+}
+
+//------------------------------------------------------------------------------
+
+bool RVDebug::reset() {
+  LOG("RVDebug::reset_cpu()\n");
+
+  // Halt and leave halt request set
+  set_dmcontrol(0x80000001);
+  while (!get_dmstatus().ALLHALTED) {
+    LOG("ALLHALTED not set yet 1\n");
+  }
+
+  // Set reset request
+  set_dmcontrol(0x80000003);
+  while (!get_dmstatus().ALLHAVERESET) {
+    LOG("ALLHAVERESET not set yet\n");
+  }
+
+  // Clear reset request and hold halt request
+  set_dmcontrol(0x80000001);
+  // this busywait seems to be required or we hang
+  while (!get_dmstatus().ALLHALTED) {
+    LOG("ALLHALTED not set yet 2\n");
+  }
+
+  // Clear HAVERESET
+  set_dmcontrol(0x90000001);
+  while (get_dmstatus().ALLHAVERESET) {
+    LOG("ALLHAVERESET not cleared yet\n");
+  }
+
+  // Clear halt request
+  set_dmcontrol(0x00000001);
+
+  // Reset cached state
+  init();
+
+  // Resetting the CPU also resets DCSR, redo it.
+  enable_breakpoints();
+
+  LOG("RVDebug::reset_cpu() done\n");
+
+  return true;
+}
+
+//------------------------------------------------------------------------------
+
+bool RVDebug::enable_breakpoints() {
+  CHECK(get_dmstatus().ALLHALTED);
+
   // Turn on debug breakpoints & stop counters/timers during debug
   auto dcsr = get_dcsr();
   dcsr.EBREAKM = 1;
@@ -64,10 +149,68 @@ void RVDebug::reset() {
   dcsr.STOPTIME = 1;
   set_dcsr(dcsr);
 
-  // Resume if we were halted
-  if (!was_halted) {
-    resume();
+  return true;
+}
+
+//------------------------------------------------------------------------------
+
+void RVDebug::load_prog(const char *name, uint32_t *prog, uint32_t clobber) {
+  //LOG("RVDebug::load_prog(%s, 0x%08x, 0x%08x)\n", name, prog, clobber);
+
+  // Upload any PROG{N} word that changed.
+  for (int i = 0; i < 8; i++) {
+    if (prog_cache[i] != prog[i]) {
+      dmi->put(DM_PROGBUF0 + i, prog[i]);
+      prog_cache[i] = prog[i];
+    }
   }
+
+  // Save any registers this program is going to clobber.
+  for (int i = 0; i < reg_count; i++) {
+    if (bit(clobber, i)) {
+      if (!bit(cached_regs, i)) {
+        if (!bit(dirty_regs, i)) {
+          reg_cache[i] = get_gpr(i);
+          cached_regs |= (1 << i);
+        }
+        else {
+          CHECK(false, "RVDebug::run_prog_slow() - Reg %d is about to be clobbered, but we can't get a clean copy because it's already dirty\n");
+        }
+      }
+    }
+  }
+
+  run_prog_will_clobber = clobber;
+
+  //printf("RVDebug::load_prog() done\n");
+}
+
+//------------------------------------------------------------------------------
+
+void RVDebug::run_prog(bool wait_until_not_busy) {
+  //LOG("RVDebug::run_prog()\n");
+
+  // We can NOT save registers here, as doing so would clobber DATA0 which may
+  // be loaded with something the program needs. >:(
+
+  Reg_COMMAND cmd;
+  cmd.POSTEXEC = 1;
+  set_command(cmd);
+
+  if (wait_until_not_busy) {
+    while (get_abstractcs().BUSY) {
+      //LOG("get_abstractcs().BUSY not cleared yet\n");
+    }
+  }
+  else {
+    // It takes 40 usec to do _anything_ over the debug interface, so if the
+    // program is "fast" then we should _never_ see BUSY... right?
+    CHECK(!get_abstractcs().BUSY);
+  }
+
+  this->dirty_regs |= run_prog_will_clobber;
+  
+  //LOG("RVDebug::run_prog() done\n");
 }
 
 //------------------------------------------------------------------------------
@@ -138,140 +281,6 @@ void RVDebug::set_dscratch1(uint32_t r) { set_csr(CSR_DSCRATCH1, r); }
 
 //------------------------------------------------------------------------------
 
-void RVDebug::halt() {
-  //printf("RVDebug::halt()\n");
-
-  set_dmcontrol(0x80000001);
-  while (!get_dmstatus().ALLHALTED) {
-    //printf("not halted yet\n");
-  }
-  set_dmcontrol(0x00000001);
-
-  //printf("RVDebug::halt() done\n");
-}
-
-//------------------------------------------------------------------------------
-
-void RVDebug::resume() {
-  //printf("RVDebug::resume()\n");
-
-  set_dmcontrol(0x40000001);
-  // We can't check ALLRUNNING because we might hit a breakpoint immediately
-  while (!get_dmstatus().ALLRESUMEACK) {
-    //printf("not resumed yet\n");
-  }
-  set_dmcontrol(0x00000001);
-
-  clean_regs = 0;
-
-  //printf("RVDebug::resume() done\n");
-}
-
-//------------------------------------------------------------------------------
-
-void RVDebug::step() {
-  printf("RVDebug::step()\n");
-
-  Csr_DCSR dcsr = get_dcsr();
-  dcsr.STEP = 1;
-  set_dcsr(dcsr);
-
-  set_dmcontrol(0x40000001);
-  // We can't check ALLRUNNING because we might hit a breakpoint immediately
-  while (!get_dmstatus().ALLRESUMEACK) {
-  }
-  // we might be able to skip this check?
-  while (!get_dmstatus().ALLHALTED) {
-  }
-  set_dmcontrol(0x00000001);
-
-  clean_regs = 0;
-
-  dcsr.STEP = 0;
-  set_dcsr(dcsr);
-
-  printf("RVDebug::step() done\n");
-}
-
-//------------------------------------------------------------------------------
-
-void RVDebug::reset_cpu() {
-  printf("reset_cpu()");
-
-  // Halt and leave halt request set
-  set_dmcontrol(0x80000001);
-  while (!get_dmstatus().ALLHALTED) {
-  }
-
-  // Set reset request
-  set_dmcontrol(0x80000003);
-  while (!get_dmstatus().ALLHAVERESET) {
-  }
-
-  // Clear reset request and hold halt request
-  set_dmcontrol(0x80000001);
-  // this busywait seems to be required or we hang
-  while (!get_dmstatus().ALLHALTED) {
-  }
-
-  // Clear HAVERESET
-  set_dmcontrol(0x90000001);
-  while (get_dmstatus().ALLHAVERESET) {
-  }
-
-  // Clear halt request
-  set_dmcontrol(0x00000001);
-
-  // Resetting the CPU also resets DCSR, redo it.
-  auto dcsr = get_dcsr();
-  dcsr.EBREAKM = 1;
-  dcsr.EBREAKS = 1;
-  dcsr.EBREAKU = 1;
-  dcsr.STEPIE = 0;
-  dcsr.STOPCOUNT = 1;
-  dcsr.STOPTIME = 1;
-  set_dcsr(dcsr);
-
-  // Reset cached state
-  for (int i = 0; i < reg_count; i++) {
-    reg_cache[i] = 0xDEADBEEF;
-  }
-  dirty_regs = 0;
-  clean_regs = 0;
-}
-
-//------------------------------------------------------------------------------
-
-void RVDebug::load_prog(const char *name, uint32_t *prog, uint32_t dirty_regs) {
-  //printf("load_prog %s 0x%08x\n", name, dirty_regs);
-
-  // Save any registers this program is going to clobber.
-  for (int i = 0; i < reg_count; i++) {
-    if (dirty_regs & (1 << i)) {
-      if (clean_regs & (1 << i)) {
-        // already got a clean copy
-      } else {
-        reg_cache[i] = get_gpr(i);
-        clean_regs |= (1 << i);
-      }
-    }
-  }
-
-  this->dirty_regs |= dirty_regs;
-
-  // Upload any PROG{N} word that changed.
-  for (int i = 0; i < 8; i++) {
-    if (prog_cache[i] != prog[i]) {
-      dmi->put(DM_PROGBUF0 + i, prog[i]);
-      prog_cache[i] = prog[i];
-    }
-  }
-
-  //printf("load_prog %s done\n", name);
-}
-
-//------------------------------------------------------------------------------
-
 uint32_t RVDebug::get_gpr(int index) {
   if (index == 16) {
     return get_dpc();
@@ -307,9 +316,12 @@ void RVDebug::set_gpr(int index, uint32_t gpr) {
 //------------------------------------------------------------------------------
 
 void RVDebug::reload_regs() {
+  LOG("RVDebug::reload_regs()\n");
+
   for (int i = 0; i < reg_count; i++) {
     if (dirty_regs & (1 << i)) {
-      if (clean_regs & (1 << i)) {
+      if (cached_regs & (1 << i)) {
+        LOG("  Reloading reg %02d\n", i);
         set_gpr(i, reg_cache[i]);
       } else {
         CHECK(false, "GPR %d is dirity and we dont' have a saved copy!\n", i);
@@ -318,6 +330,7 @@ void RVDebug::reload_regs() {
   }
 
   dirty_regs = 0;
+  LOG("RVDebug::reload_regs() done\n");
 }
 
 //------------------------------------------------------------------------------
@@ -346,31 +359,11 @@ void RVDebug::set_csr(int index, uint32_t data) {
 }
 
 //------------------------------------------------------------------------------
-// Run a "slow" program that require busywaiting for it to complete.
 
-void RVDebug::run_prog_slow() {
-  Reg_COMMAND cmd;
-  cmd.POSTEXEC = 1;
-  set_command(cmd);
-  while (get_abstractcs().BUSY) {}
+bool RVDebug::clear_err() {
+  set_abstractcs(0x00030000);
+  return true;
 }
-
-//------------------------------------------------------------------------------
-// Run a "fast" program that doesn't require a busywait after it's done.
-
-void RVDebug::run_prog_fast() {
-  Reg_COMMAND cmd = 0;
-  cmd.POSTEXEC = 1;
-  set_command(cmd);
-
-  // It takes 40 usec to do _anything_ over the debug interface, so if the
-  // program is "fast" then we should _never_ see BUSY... right?
-  CHECK(!get_abstractcs().BUSY);
-}
-
-//------------------------------------------------------------------------------
-
-void RVDebug::clear_err() { set_abstractcs(0x00030000); }
 
 //------------------------------------------------------------------------------
 
@@ -591,7 +584,6 @@ void RVDebug::set_mem_u32_aligned(uint32_t addr, uint32_t data) {
 }
 
 //------------------------------------------------------------------------------
-// FIXME we should handle invalid address ranges somehow...
 
 void RVDebug::get_block_aligned(uint32_t addr, void *dst, int size_bytes) {
   CHECK((addr & 3) == 0, "RVDebug::get_block_aligned() bad address");
@@ -613,7 +605,7 @@ void RVDebug::get_block_aligned(uint32_t addr, void *dst, int size_bytes) {
 
   uint32_t *cursor = (uint32_t *)dst;
   for (int i = 0; i < size_bytes / 4; i++) {
-    run_prog_fast();
+      run_prog_fast();
     cursor[i] = get_data0();
   }
 }
@@ -637,7 +629,7 @@ void RVDebug::get_block_unaligned(uint32_t addr, void *dst, int size_bytes) {
 
   uint8_t *cursor = (uint8_t *)dst;
   for (int i = 0; i < size_bytes; i++) {
-    run_prog_fast();
+      run_prog_fast();
     cursor[i] = get_data0();
   }
 }
@@ -665,8 +657,8 @@ void RVDebug::set_block_aligned(uint32_t addr, void *src, int size_bytes) {
   uint32_t *cursor = (uint32_t *)src;
   for (int i = 0; i < size_bytes / 4; i++) {
     set_data0(*cursor++);
-    run_prog_fast();
-  }
+      run_prog_fast();
+    }
 }
 
 //------------------------------------------------------------------------------
@@ -689,69 +681,92 @@ void RVDebug::set_block_unaligned(uint32_t addr, void *src, int size_bytes) {
   uint8_t *cursor = (uint8_t *)src;
   for (int i = 0; i < size_bytes; i++) {
     set_data0(*cursor++);
-    run_prog_fast();
-  }
-}
-
-//------------------------------------------------------------------------------
-// Dumps all ram
-
-#if 0
-void RVDebug::dump_ram() {
-  uint8_t temp[2048];
-
-  get_block_aligned(0x20000000, temp, 2048);
-
-  for (int y = 0; y < 32; y++) {
-    for (int x = 0; x < 16; x++) {
-      printf("0x%08x ", ((uint32_t*)temp)[x + y * 16]);
+      run_prog_fast();
     }
-    printf("\n");
-  }
 }
-#endif
 
 //------------------------------------------------------------------------------
 
 void RVDebug::dump() {
+  printf("\n");
+  printf_y("RVDebug::dump()\n");
+
   auto actual_halted = get_dmstatus().ALLHALTED;
 
-  printf("REG_DATA0 = 0x%08x\n", get_data0());
-  printf("REG_DATA1 = 0x%08x\n", get_data1());
+  printf_b("prog_cache\n");
+  printf("  0x%08x  0x%08x  0x%08x  0x%08x  0x%08x  0x%08x  0x%08x  0x%08x\n",
+         prog_cache[0], prog_cache[1], prog_cache[2], prog_cache[3],
+         prog_cache[4], prog_cache[5], prog_cache[6], prog_cache[7]);
+  printf_b("reg_cache\n");
+  for (int y = 0; y < 4; y++) {
+    for (int x = 0; x < 8; x++) {
+      printf("  0x%08x", reg_cache[x + y * 8]);
+    }
+    printf("\n");
+  }
+  printf_b("dirty_regs\n");
+  printf("  0x%08x\n", dirty_regs);
+  
+  printf_b("cached_regs\n");
+  printf("  0x%08x\n", cached_regs);
+
+  printf_b("DM_DATA0\n");
+  printf("  0x%08x\n", get_data0());
+  
+  printf_b("DM_DATA1\n");
+  printf("  0x%08x\n", get_data1());
+
   get_dmcontrol().dump();
   get_dmstatus().dump();
   get_hartinfo().dump();
   get_abstractcs().dump();
   get_command().dump();
   get_abstractauto().dump();
-  printf("PROG 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x\n",
+
+  printf_b("DM_PROGBUF[N]\n");
+  printf("  0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x\n",
          get_prog(0), get_prog(1), get_prog(2), get_prog(3), get_prog(4),
          get_prog(5), get_prog(6), get_prog(7));
-  printf("REG_HALTSUM = 0x%08x\n", get_haltsum0());
+
+  printf_b("DM_HALTSUM\n");
+  printf("  0x%08x\n", get_haltsum0());
 
   if (actual_halted) {
     get_dcsr().dump();
-    printf("CSR_DPC = 0x%08x\n", get_dpc());
-    printf("CSR_DSCRATCH0 = 0x%08x\n", get_dscratch0());
-    printf("CSR_DSCRATCH1 = 0x%08x\n", get_dscratch1());
+    printf_b("CSR_DPC\n");
+    printf("  0x%08x\n", get_dpc());
+    printf_b("CSR_DSCRATCH0\n");
+    printf("  0x%08x\n", get_dscratch0());
+    printf_b("CSR_DSCRATCH1\n");
+    printf("  0x%08x\n", get_dscratch1());
   }
   else {
     printf("<can't display debug CSRs while target is running>\n");
   }
+
+  printf("\n");
 }
 
 //------------------------------------------------------------------------------
 
 void Reg_DMCONTROL::dump() {
-  printf("Reg_DMCONTROL = 0x%08x\n", raw);
-  printf("  DMACTIVE:%d  NDMRESET:%d  ACKHAVERESET:%d  RESUMEREQ:%d  HALTREQ:%d\n",
-    DMACTIVE, NDMRESET, ACKHAVERESET, RESUMEREQ, HALTREQ);
+  printf_b("DM_DMCONTROL\n");
+  printf("  0x%08x\n", raw);
+  printf("  DMACTIVE:%d  NDMRESET:%d\n",
+            DMACTIVE,    NDMRESET);
+  printf("  CLRRESETHALTREQ:%d  SETRESETHALTREQ:%d  CLRKEEPALIVE:%d  SETKEEPALIVE:%d\n",
+            CLRRESETHALTREQ,    SETRESETHALTREQ,    CLRKEEPALIVE,    SETKEEPALIVE);
+  printf("  HARTSELHI:%d  HARTSELLO:%d  HASEL:%d  ACKUNAVAIL:%d  ACKHAVERESET:%d\n",
+            HARTSELHI,    HARTSELLO,    HASEL,    ACKUNAVAIL,    ACKHAVERESET);
+  printf("  HARTRESET:%d  RESUMEREQ:%d  HALTREQ:%d\n",
+            HARTRESET,    RESUMEREQ,    HALTREQ);
 }
 
 //------------------------------------------------------------------------------
 
 void Reg_DMSTATUS::dump() {
-  printf("Reg_DMSTATUS = 0x%08x\n", raw);
+  printf_b("DM_DMSTATUS\n");
+  printf("  0x%08x\n", raw);
   printf("  VERSION:%d  AUTHENTICATED:%d\n", VERSION, AUTHENTICATED);
   printf("  ANYHALTED:%d  ANYRUNNING:%d  ANYAVAIL:%d ANYRESUMEACK:%d  ANYHAVERESET:%d\n", ANYHALTED, ANYRUNNING, ANYAVAIL, ANYRESUMEACK, ANYHAVERESET);
   printf("  ALLHALTED:%d  ALLRUNNING:%d  ALLAVAIL:%d ALLRESUMEACK:%d  ALLHAVERESET:%d\n", ALLHALTED, ALLRUNNING, ALLAVAIL, ALLRESUMEACK, ALLHAVERESET);
@@ -760,7 +775,8 @@ void Reg_DMSTATUS::dump() {
 //------------------------------------------------------------------------------
 
 void Reg_HARTINFO::dump() {
-  printf("Reg_HARTINFO = 0x%08x\n", raw);
+  printf_b("DM_HARTINFO\n");
+  printf("  0x%08x\n", raw);
   printf("  DATAADDR:%d  DATASIZE:%d  DATAACCESS:%d  NSCRATCH:%d\n",
     DATAADDR, DATASIZE, DATAACCESS, NSCRATCH);
 }
@@ -768,7 +784,8 @@ void Reg_HARTINFO::dump() {
 //------------------------------------------------------------------------------
 
 void Reg_ABSTRACTCS::dump() {
-  printf("Reg_ABSTRACTCS = 0x%08x\n", raw);
+  printf_b("DM_ABSTRACTCS\n");
+  printf("  0x%08x\n", raw);
   printf("  DATACOUNT:%d  CMDER:%d  BUSY:%d  PROGBUFSIZE:%d\n",
     DATACOUNT, CMDER, BUSY, PROGBUFSIZE);
 }
@@ -776,15 +793,17 @@ void Reg_ABSTRACTCS::dump() {
 //------------------------------------------------------------------------------
 
 void Reg_COMMAND::dump() {
-  printf("Reg_COMMAND = 0x%08x\n", raw);
-  printf("  REGNO:%d  WRITE:%d  TRANSFER:%d  POSTEXEC:%d  AARPOSTINC:%d  AARSIZE:%d  CMDTYPE:%d\n",
+  printf_b("DM_COMMAND\n");
+  printf("  0x%08x\n", raw);
+  printf("  REGNO:%04x  WRITE:%d  TRANSFER:%d  POSTEXEC:%d  AARPOSTINC:%d  AARSIZE:%d  CMDTYPE:%d\n",
     REGNO, WRITE, TRANSFER, POSTEXEC, AARPOSTINC, AARSIZE, CMDTYPE);
 }
 
 //------------------------------------------------------------------------------
 
 void Reg_ABSTRACTAUTO::dump() {
-  printf("Reg_ABSTRACTAUTO = 0x%08x\n", raw);
+  printf_b("DM_ABSTRACTAUTO\n");
+  printf("  0x%08x\n", raw);
   printf("  AUTOEXECDATA:%d  AUTOEXECPROG:%d\n",
     AUTOEXECDATA, AUTOEXECPROG);
 }
@@ -792,7 +811,8 @@ void Reg_ABSTRACTAUTO::dump() {
 //------------------------------------------------------------------------------
 
 void Reg_DBGMCU_CR::dump() {
-  printf("Reg_DBGMCU_CR = 0x%08x\n", raw);
+  printf_b("DM_DBGMCU_CR\n");
+  printf("  0x%08x\n", raw);
   printf("  IWDG_STOP:%d  WWDG_STOP:%d  TIM1_STOP:%d  TIM2_STOP:%d\n",
     IWDG_STOP, WWDG_STOP, TIM1_STOP, TIM2_STOP);
 }
@@ -800,7 +820,8 @@ void Reg_DBGMCU_CR::dump() {
 //------------------------------------------------------------------------------
 
 void Csr_DCSR::dump() {
-  printf("Reg_DCSR = 0x%08x\n", raw);
+  printf_b("DM_DCSR\n");
+  printf("  0x%08x\n", raw);
   printf("  PRV:%d  STEP:%d  NMIP:%d  MPRVEN:%d  CAUSE:%d  STOPTIME:%d  STOPCOUNT:%d\n",
             PRV,    STEP,    NMIP,    MPRVEN,    CAUSE,    STOPTIME,    STOPCOUNT);
   printf("  STEPIE:%d  EBREAKU:%d  EBREAKS:%d  EBREAKM:%d  XDEBUGVER:%d\n",

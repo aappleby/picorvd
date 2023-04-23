@@ -125,7 +125,7 @@ void PicoSWIO::dump() {
   get_cpbr().dump();
   get_cfgr().dump();
   get_shdwcfgr().dump();
-  printf("Reg_PARTID = 0x%08x\n", get_partid());
+  printf("DM_PARTID = 0x%08x\n", get_partid());
 }
 
 //------------------------------------------------------------------------------
