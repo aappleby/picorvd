@@ -108,6 +108,39 @@ void run_tests(RVDebug& rvd) {
   }
   CHECK(rvd.get_abstractcs().CMDER == 0);
 
+  // Test block writes at both ends of memory
+  {
+    uint32_t block[4] = { 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF };
+    CHECK(rvd.get_abstractcs().CMDER == 0);
+    rvd.set_block_aligned(0x20000000, block, 16);
+    CHECK(rvd.get_abstractcs().CMDER == 0);
+  }
+
+  {
+    uint32_t block[4] = { 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF };
+    CHECK(rvd.get_abstractcs().CMDER == 0);
+    rvd.set_block_aligned(0x20000800 - 16, block, 16);
+    CHECK(rvd.get_abstractcs().CMDER == 0);
+  }
+
+  // Off the high end by 4
+  {
+    uint32_t block[4] = { 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF };
+    CHECK(rvd.get_abstractcs().CMDER == 0);
+    rvd.set_block_aligned(0x20000800 - 12, block, 16);
+    CHECK(rvd.get_abstractcs().CMDER == 3);
+    rvd.clear_err();
+  }
+
+  // Off the low end by 4
+  {
+    uint32_t block[4] = { 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF };
+    CHECK(rvd.get_abstractcs().CMDER == 0);
+    rvd.set_block_aligned(0x20000000 - 4, block, 16);
+    CHECK(rvd.get_abstractcs().CMDER == 3);
+    rvd.clear_err();
+  }
+
   printf("All tests pass!\n");
 }
 

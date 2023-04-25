@@ -124,10 +124,7 @@ struct RVDebug {
   // Bulk memory access
 
   void get_block_aligned  (uint32_t addr, void* data, int size);
-  void get_block_unaligned(uint32_t addr, void* data, int size);
-
   void set_block_aligned  (uint32_t addr, void* data, int size);
-  void set_block_unaligned(uint32_t addr, void* data, int size);
 
 private:
 
