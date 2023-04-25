@@ -8,7 +8,7 @@
 #include <ctype.h>
 #include "hardware/timer.h"
 
-#define DEBUG_REMOTE
+//#define DEBUG_REMOTE
 
 static const int breakpoint_check_interval = 100000; // 100 msec
 
@@ -129,12 +129,12 @@ void GDBServer::handle_c() {
   // the hart stops.
 
   if (!soft->resume()) {
-    printf("soft->resume() returned false\n");
+    LOG("soft->resume() returned false\n");
     send.set_packet("T05");
     next_state = SEND_PREFIX;
   }
   else {
-    printf("soft->resume() returned true\n");
+    LOG("soft->resume() returned true\n");
     next_state = RUNNING;
   }
 }

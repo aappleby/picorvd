@@ -534,24 +534,40 @@ void RVDebug::set_mem_u8(uint32_t addr, uint8_t data) {
 
 //------------------------------------------------------------------------------
 
+static uint16_t prog_get_set_u32[16] = {
+  //0xe0000537,   // lui a0,0xe0000
+  0x0537,
+  0xe000,
+
+  //0x0f450513,   // addi a0,a0,0xF4
+  0x0513,
+  0x0f45,
+
+  0x414c,         // lw a1,4(a0)
+  0x8985,         // andi a1,a1,1
+  0xc591,         // beqz a1,get_u32
+
+  //set_u32:
+  0x414c,         // lw a1,4(a0)
+  0x15fd,        	// addi a1,a1,-1
+  0x4108,         // lw a0,0(a0)
+  0xc188,         // sw a0,0(a1)
+  0x9002,         // ebreak
+
+  //get_u32:
+  0x414c,         // lw a1,4(a0)
+  0x418c,         // lw a1,0(a1)
+  0xc10c,         // sw a1,0(a0)
+  0x9002,         // ebreak
+};
+
 uint32_t RVDebug::get_mem_u32_aligned(uint32_t addr) {
   if (addr & 3) {
     LOG_R("RVDebug::get_mem_u32_aligned() - Bad address 0x%08x\n", addr);
     return 0;
   }
 
-  static uint32_t prog_get_mem[8] = {
-      0xe0000537, // lui  a0, 0xE0000
-      0x0f852583, // lw   a1, 0x0F8(a0)
-      0x0005a583, // lw   a1, 0x000(a1)
-      0x0eb52a23, // sw   a1, 0x0F4(a0)
-      0x00100073, // ebreak
-      0x00100073, // ebreak
-      0x00100073, // ebreak
-      0x00100073, // ebreak
-  };
-
-  load_prog("get_mem_u32", prog_get_mem, BIT_A0 | BIT_A1);
+  load_prog("prog_get_set_u32", (uint32_t*)prog_get_set_u32, BIT_A0 | BIT_A1);
   set_data1(addr);
   run_prog_fast();
 
@@ -568,21 +584,10 @@ void RVDebug::set_mem_u32_aligned(uint32_t addr, uint32_t data) {
     return;
   }
 
-  static uint32_t prog_set_mem[8] = {
-      0xe0000537, // lui  a0, 0xE0000
-      0x0f852583, // lw   a1, 0x0F8(a0)
-      0x0f452503, // lw   a0, 0x0F4(a0)
-      0x00a5a023, // sw   a0, 0x000(a1)
-      0x00100073, // ebreak
-      0x00100073, // ebreak
-      0x00100073, // ebreak
-      0x00100073, // ebreak
-  };
-
-  load_prog("set_mem_u32", prog_set_mem, BIT_A0 | BIT_A1);
+  load_prog("prog_get_set_u32", (uint32_t*)prog_get_set_u32, BIT_A0 | BIT_A1);
 
   set_data0(data);
-  set_data1(addr);
+  set_data1(addr | 1);
   run_prog_fast();
 }
 

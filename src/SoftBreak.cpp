@@ -139,11 +139,11 @@ bool SoftBreak::resume() {
   // flash and unhalt - we can just report that we're halted again.
 
   uint32_t dpc = rvd->get_dpc();
-  printf("resuming, dpc is at 0x%08x\n", dpc);
+  LOG("resuming, dpc is at 0x%08x\n", dpc);
 
   for (int i = 0; i < breakpoint_max; i++) {
     if (breakpoints[i] != BP_EMPTY) {
-      printf("breakpoint at 0x%08x\n", breakpoints[i]);
+      LOG("breakpoint at 0x%08x\n", breakpoints[i]);
     }
   }
 

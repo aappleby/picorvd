@@ -9,7 +9,7 @@ using getter = char (*)();
 
 void printf_color(const char* color, const char* fmt, ...);
 
-#if 1
+#if 0
 
 #define LOG_R(...) printf_color("1;31", __VA_ARGS__)
 #define LOG_G(...) printf_color("1;32", __VA_ARGS__)
@@ -52,9 +52,9 @@ void vprint_to(putter p, const char* fmt, va_list args);
 void print_to(putter p, const char* fmt, ...);
 char* atox(char* cursor, int& out);
 
-#define CHECK(A, args...) if(!(A)) { printf_r("ASSERT FAIL %s %d\n", __FILE__, __LINE__); printf_r("" args); printf_r("\n"); while (1); }
+//#define CHECK(A, args...) if(!(A)) { printf_r("ASSERT FAIL %s %d\n", __FILE__, __LINE__); printf_r("" args); printf_r("\n"); while (1); }
 
-//#define CHECK(A, args...)
+#define CHECK(A, args...)
 
 /*
 #define CHECK_EQ(A, B) { \
