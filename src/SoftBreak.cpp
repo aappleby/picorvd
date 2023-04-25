@@ -139,6 +139,14 @@ bool SoftBreak::resume() {
   // flash and unhalt - we can just report that we're halted again.
 
   uint32_t dpc = rvd->get_dpc();
+  printf("resuming, dpc is at 0x%08x\n", dpc);
+
+  for (int i = 0; i < breakpoint_max; i++) {
+    if (breakpoints[i] != BP_EMPTY) {
+      printf("breakpoint at 0x%08x\n", breakpoints[i]);
+    }
+  }
+
   bool on_breakpoint = false;
   for (int i = 0; i < breakpoint_max; i++) {
     if (breakpoints[i] == dpc) {
@@ -154,7 +162,7 @@ bool SoftBreak::resume() {
     return true;
   }
   else {
-    //LOG("Not resuming because we immediately hit a breakpoint at 0x%08x\n", dpc);
+    LOG("Not resuming because we immediately hit a breakpoint at 0x%08x\n", dpc);
     halted = true;
     return false;
   }
@@ -320,7 +328,7 @@ void SoftBreak::patch_flash() {
   for (int page = 0; page < page_count; page++) {
     if (!dirty_map[page]) continue;
 
-    //LOG("patching page %d to have %d breakpoints\n", page, break_map[page]);
+    LOG("patching page %d to have %d breakpoints\n", page, break_map[page]);
     int page_base = page * page_size;
     flash->wipe_page(page_base);
     flash->write_flash(page_base, flash_dirty + page_base, page_size);
@@ -339,7 +347,7 @@ void SoftBreak::unpatch_flash() {
   for (int page = 0; page < page_count; page++) {
     if (!flash_map[page]) continue;
 
-    //LOG("unpatching page %d\n", page);
+    LOG("unpatching page %d\n", page);
     int page_base = page * page_size;
     flash->wipe_page(page_base);
     flash->write_flash(page_base, flash_clean + page_base, page_size);

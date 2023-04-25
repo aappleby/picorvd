@@ -36,7 +36,7 @@ bool RVDebug::halt() {
   while(!get_dmstatus().ALLHALTED) {
     LOG("ALLHALTED not set yet\n");
   }
-  set_dmcontrol(0x00000001);      
+  set_dmcontrol(0x00000001);
 
   LOG("RVDebug::halt() done\n");
   return true;
@@ -209,7 +209,7 @@ void RVDebug::run_prog(bool wait_until_not_busy) {
   }
 
   this->dirty_regs |= prog_will_clobber;
-  
+
   //LOG("RVDebug::run_prog() done\n");
 }
 
@@ -280,6 +280,7 @@ void RVDebug::set_dscratch0(uint32_t r) { set_csr(CSR_DSCRATCH0, r); }
 void RVDebug::set_dscratch1(uint32_t r) { set_csr(CSR_DSCRATCH1, r); }
 
 //------------------------------------------------------------------------------
+// Getting multiple GPRs via autoexec is not supported on CH32V003 :/
 
 uint32_t RVDebug::get_gpr(int index) {
   if (index == 16) {
@@ -600,21 +601,20 @@ void RVDebug::get_block_aligned(uint32_t addr, void *dst, int size_bytes) {
       0x00100073, // ebreak
   };
 
+  uint32_t *cursor = (uint32_t *)dst;
+  int size_dwords = (size_bytes / 4);
+
   load_prog("get_block_aligned", prog_get_block_aligned, BIT_A0 | BIT_A1);
   set_data1(addr);
+  run_prog_fast();
+  set_abstractauto(0x00000001);
 
-  bool first_word = true;
-  uint32_t *cursor = (uint32_t *)dst;
-  for (int i = 0; i < size_bytes / 4; i++) {
-    if (first_word) {
-      run_prog_fast();
-      set_abstractauto(0x00000001);
-      first_word = false;
+  for (int i = 0; i <= size_dwords; i++) {
+    if (i == size_dwords - 1) {
+      set_abstractauto(0x00000000);
     }
     cursor[i] = get_data0();
   }
-
-  set_abstractauto(0x00000000);
 }
 
 //------------------------------------------------------------------------------
@@ -631,21 +631,19 @@ void RVDebug::get_block_unaligned(uint32_t addr, void *dst, int size_bytes) {
       0x00100073, // ebreak
   };
 
+  uint8_t *cursor = (uint8_t *)dst;
+
   load_prog("get_block_unaligned", prog_get_block_unaligned, BIT_A0 | BIT_A1);
   set_data1(addr);
+  run_prog_fast();
+  set_abstractauto(0x00000001);
 
-  bool first_word = true;
-  uint8_t *cursor = (uint8_t *)dst;
   for (int i = 0; i < size_bytes; i++) {
-    if (first_word) {
-      run_prog_fast();
-      set_abstractauto(0x00000001);
-      first_word = false;
+    if (i == size_bytes - 1) {
+      set_abstractauto(0x00000000);
     }
     cursor[i] = get_data0();
   }
-
-  set_abstractauto(0x00000000);
 }
 
 //------------------------------------------------------------------------------
@@ -665,21 +663,20 @@ void RVDebug::set_block_aligned(uint32_t addr, void *src, int size_bytes) {
       0x00100073, // ebreak
   };
 
+  uint32_t *cursor = (uint32_t *)src;
+  int size_dwords = size_bytes / 4;
+
   load_prog("set_block_aligned", prog_set_block_aligned, BIT_A0 | BIT_A1);
   set_data1(addr);
+  run_prog_fast();
+  set_abstractauto(0x00000001);
 
-  bool first_word = true;
-  uint32_t *cursor = (uint32_t *)src;
-  for (int i = 0; i < size_bytes / 4; i++) {
-    set_data0(*cursor++);
-    if (first_word) {
-      run_prog_fast();
-      set_abstractauto(0x00000001);
-      first_word = false;
+  for (int i = 0; i < size_dwords; i++) {
+    if (i == size_dwords - 1) {
+      set_abstractauto(0x00000000);
     }
+    set_data0(*cursor++);
   }
-
-  set_abstractauto(0x00000000);
 }
 
 //------------------------------------------------------------------------------
@@ -698,20 +695,16 @@ void RVDebug::set_block_unaligned(uint32_t addr, void *src, int size_bytes) {
 
   load_prog("set_block_unaligned", prog_set_block_unaligned, BIT_A0 | BIT_A1);
   set_data1(addr);
+  run_prog_fast();
+  set_abstractauto(0x00000001);
 
-  bool first_word = true;
   uint8_t *cursor = (uint8_t *)src;
   for (int i = 0; i < size_bytes; i++) {
-    set_data0(*cursor++);
-
-    if (first_word) {
-      run_prog_fast();
-      set_abstractauto(0x00000001);
-      first_word = false;
+    if (i == size_bytes - 1) {
+      set_abstractauto(0x00000000);
     }
+    set_data0(*cursor++);
   }
-
-  set_abstractauto(0x00000000);
 }
 
 //------------------------------------------------------------------------------
@@ -735,13 +728,13 @@ void RVDebug::dump() {
   }
   printf_b("dirty_regs\n");
   printf("  0x%08x\n", dirty_regs);
-  
+
   printf_b("cached_regs\n");
   printf("  0x%08x\n", cached_regs);
 
   printf_b("DM_DATA0\n");
   printf("  0x%08x\n", get_data0());
-  
+
   printf_b("DM_DATA1\n");
   printf("  0x%08x\n", get_data1());
 

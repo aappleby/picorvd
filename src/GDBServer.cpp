@@ -129,10 +129,12 @@ void GDBServer::handle_c() {
   // the hart stops.
 
   if (!soft->resume()) {
+    printf("soft->resume() returned false\n");
     send.set_packet("T05");
-    next_state = DISCONNECTED;
+    next_state = SEND_PREFIX;
   }
   else {
+    printf("soft->resume() returned true\n");
     next_state = RUNNING;
   }
 }
@@ -140,12 +142,13 @@ void GDBServer::handle_c() {
 //------------------------------------------------------------------------------
 
 void GDBServer::handle_D() {
-  CHECK(false, "GDBServer::handle_D() - Need to double check how to implement this");
+  //CHECK(false, "GDBServer::handle_D() - Need to double check how to implement this");
 
   recv.take('D');
   LOG("GDB detaching\n");
   send.set_packet("OK");
-  next_state = DISCONNECTED;
+  //next_state = DISCONNECTED;
+  next_state = SEND_PREFIX;
 }
 
 //------------------------------------------------------------------------------
@@ -155,11 +158,17 @@ void GDBServer::handle_g() {
   recv.take('g');
 
   if (!recv.error) {
-    send.start_packet();
+    uint32_t buf1[17];
+
     for (int i = 0; i < rvd->get_gpr_count(); i++) {
-      send.put_hex_u32(rvd->get_gpr(i));
+      buf1[i] = rvd->get_gpr(i);
     }
-    send.put_hex_u32(rvd->get_dpc());
+    buf1[16] = rvd->get_dpc();
+
+    send.start_packet();
+    for (int i = 0; i < 17; i++) {
+      send.put_hex_u32(buf1[i]);
+    }
     send.end_packet();
   }
   else {
@@ -654,6 +663,15 @@ void GDBServer::handle_packet() {
     send.clear();
     (*this.*h)();
 
+#ifdef PARANOID
+    auto abstractcs = rvd->get_abstractcs();
+    if (abstractcs.CMDER) {
+      printf_r("Command error %d\n", abstractcs.CMDER);
+      abstractcs.CMDER = 7;
+      rvd->set_abstractcs(abstractcs);
+    }
+#endif
+
     if (recv.error) {
       LOG_R("\nParse failure for packet!\n");
       send.set_packet("E00");
@@ -806,7 +824,9 @@ void GDBServer::update(bool connected, bool byte_ie, char byte_in, bool& byte_oe
           // Packet checksum OK, handle it.
           byte_out = '+';
           byte_oe = true;
-          printf("\n"); // FIXME REMOVE THIS LATER
+#ifdef DEBUG_REMOTE
+          printf(">> %s\n", recv.buf);
+#endif
           handle_packet();
 
           // If handle_packet() changed next_state, don't change it again.
@@ -819,6 +839,9 @@ void GDBServer::update(bool connected, bool byte_ie, char byte_in, bool& byte_oe
     }
 
     case SEND_PREFIX: {
+#ifdef DEBUG_REMOTE
+      printf("<<   %s\n", send.buf);
+#endif
       byte_out = '$';
       byte_oe = true;
       checksum = 0;
@@ -895,21 +918,6 @@ void GDBServer::update(bool connected, bool byte_ie, char byte_in, bool& byte_oe
       break;
     }
   }
-
-  //----------------------------------------
-
-#ifdef DEBUG_REMOTE
-  if (byte_ie) printf(isprint(byte_in)  ? "%c" : "{%02x}", byte_in);
-  if (byte_oe) printf(isprint(byte_out) ? "%c" : "{%02x}", byte_out);
-
-  if (state != IDLE && next_state == IDLE) {
-    printf("\n>> ");
-  }
-
-  if (state != SEND_PREFIX && next_state == SEND_PREFIX) {
-    printf("\n<<   ");
-  }
-#endif
 
   //----------------------------------------
 

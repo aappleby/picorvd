@@ -9,7 +9,9 @@ void run_tests(RVDebug& rvd) {
   printf("Running tests...\n");
 
   rvd.reset();
-  
+
+  CHECK(rvd->get_abstractcs().CMDER == 0);
+
   uint32_t base = 0x20000400;
 
   // Test misaligned reads
@@ -35,6 +37,7 @@ void run_tests(RVDebug& rvd) {
     CHECK(rvd.get_mem_u8 (base + 6 + offset) == 0x07);
     CHECK(rvd.get_mem_u8 (base + 7 + offset) == 0x08);
   }
+  CHECK(rvd->get_abstractcs().CMDER == 0);
 
   // Test misaligned writes
   for (int offset = 0; offset < 4; offset++) {
@@ -67,6 +70,7 @@ void run_tests(RVDebug& rvd) {
       CHECK(rvd.get_mem_u8(base + i + offset) == i + 1);
     }
   }
+  CHECK(rvd->get_abstractcs().CMDER == 0);
 
   // Test aligned block writes
   for (int size = 4; size <= 8; size += 4) {
@@ -83,6 +87,7 @@ void run_tests(RVDebug& rvd) {
       for (int i = offset + size; i < 16; i++) CHECK(rvd.get_mem_u8(base + i) == 0xFF);
     }
   }
+  CHECK(rvd->get_abstractcs().CMDER == 0);
 
   // Test unaligned block writes
   for (int size = 1; size <= 8; size++) {
@@ -98,6 +103,7 @@ void run_tests(RVDebug& rvd) {
       for (int i = offset + size; i < 16; i++) CHECK(rvd.get_mem_u8(base + i) == 0xFF);
     }
   }
+  CHECK(rvd->get_abstractcs().CMDER == 0);
 
   // Test aligned block reads
   for (int size = 4; size <= 8; size += 4) {
@@ -116,6 +122,7 @@ void run_tests(RVDebug& rvd) {
       for (int i = 4 + size; i < 16;       i++) CHECK(buf[i] == 0xFF);
     }
   }
+  CHECK(rvd->get_abstractcs().CMDER == 0);
 
   // Test unaligned block reads
   for (int size = 1; size <= 8; size++) {
@@ -134,6 +141,7 @@ void run_tests(RVDebug& rvd) {
       for (int i = 4 + size; i < 16;       i++) CHECK(buf[i] == 0xFF);
     }
   }
+  CHECK(rvd->get_abstractcs().CMDER == 0);
 
   printf("All tests pass!\n");
 }

@@ -133,7 +133,7 @@ ConsoleHandler handlers[] = {
     }
   },
 
-#if 0
+#if 1
   { "soft_halt",   [](Console& c) { c.soft->halt(); printf("Halted at DPC = 0x%08x\n", c.rvd->get_dpc()); } },
   { "soft_resume", [](Console& c) { c.soft->resume();         } },
   { "soft_step",   [](Console& c) { c.soft->step();           } },

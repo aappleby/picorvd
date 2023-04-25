@@ -4,7 +4,7 @@
 
 #include "utils.h"
 
-//#define DUMP_COMMANDS
+#define DUMP_COMMANDS
 
 __attribute__((noinline)) void busy_wait(int count) {
   volatile int c = count;

@@ -30,13 +30,12 @@ struct SoftBreak {
   int  clear_breakpoint(uint32_t addr, int size);
   void clear_all_breakpoints();
   bool has_breakpoint(uint32_t addr);
+  void patch_flash();
+  void unpatch_flash();
 
   //----------------------------------------
 
 private:
-
-  void patch_flash();
-  void unpatch_flash();
 
   RVDebug* rvd;
   WCHFlash* flash;
