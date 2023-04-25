@@ -132,11 +132,24 @@ ConsoleHandler handlers[] = {
     [](Console& c) {
       const uint32_t base = 0x00000000;
       int len = blink_bin_len;
-      printf_b("Writing flash\n");
+      printf_b("Writing flash - %d bytes\n", len);
+      uint32_t time_a = time_us_32();
       c.flash->write_flash(base, blink_bin, len);
-      printf_b("Verifying flash\n");
+      uint32_t time_b = time_us_32();
+      printf_b("Done in %d usec, %f bytes/sec\n", time_b - time_a,  1000000.0 * float(len) / float(time_b - time_a));
+    }
+  },
+
+  {
+    "check_flash",
+    [](Console& c) {
+      const uint32_t base = 0x00000000;
+      int len = blink_bin_len;
+      printf_b("Verifying flash - %d bytes\n", len);
+      uint32_t time_a = time_us_32();
       c.flash->verify_flash(base, blink_bin, len);
-      printf_b("Done\n");
+      uint32_t time_b = time_us_32();
+      printf_b("Done in %d usec, %f bytes/sec\n", time_b - time_a,  1000000.0 * float(len) / float(time_b - time_a));
     }
   },
 

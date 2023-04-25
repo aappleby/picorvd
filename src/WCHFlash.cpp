@@ -2,6 +2,8 @@
 #include "utils.h"
 #include "RVDebug.h"
 
+#include "pico/stdlib.h"
+
 const uint32_t ADDR_ESIG_FLACAP  = 0x1FFFF7E0; // Flash capacity register 0xXXXX
 const uint32_t ADDR_ESIG_UNIID1  = 0x1FFFF7E8; // UID register 1 0xXXXXXXXX
 const uint32_t ADDR_ESIG_UNIID2  = 0x1FFFF7EC; // UID register 2 0xXXXXXXXX
@@ -287,6 +289,8 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* blob, int size) {
 
   // Start feeding dwords to prog_write_flash.
 
+  uint32_t busy_time = 0;
+
   for (int page = 0; page < page_count; page++) {
     for (int dword_idx = 0; dword_idx < 16; dword_idx++) {
       int offset = (page * page_size) + (dword_idx * sizeof(uint32_t));
@@ -309,12 +313,18 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* blob, int size) {
         // We can write flash slightly faster if we only busy-wait at the end
         // of each page, but I am wary...
         // Waiting here takes 54443 us to write 564 bytes
-        //while (rvd->get_abstractcs().BUSY) {}
+        //uint32_t time_a = time_us_32();
+        while (rvd->get_abstractcs().BUSY) {}
+        //uint32_t time_b = time_us_32();
+        //busy_time += time_b - time_a;
       }
     }
     // This is the end of a page
     // Waiting here instead of the above takes 42847 us to write 564 bytes
-    while (rvd->get_abstractcs().BUSY) {}
+    //uint32_t time_a = time_us_32();
+    //while (rvd->get_abstractcs().BUSY) {}
+    //uint32_t time_b = time_us_32();
+    //busy_time += time_b - time_a;
   }
 
   rvd->set_abstractauto(0x00000000);
@@ -324,6 +334,8 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* blob, int size) {
   auto statr = Reg_FLASH_STATR(rvd->get_mem_u32(ADDR_FLASH_STATR));
   statr.EOP = 1;
   rvd->set_mem_u32(ADDR_FLASH_STATR, statr);
+
+  //printf("busy_time %d\n", busy_time);
 
   LOG("WCHFlash::write_flash() done\n");
 }

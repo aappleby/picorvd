@@ -533,6 +533,9 @@ void RVDebug::set_mem_u8(uint32_t addr, uint8_t data) {
 }
 
 //------------------------------------------------------------------------------
+// data0 = data to write
+// data1 = address. set low bit if this is a write
+// only clobbers A0/A1
 
 static uint16_t prog_get_set_u32[16] = {
   //0xe0000537,   // lui a0,0xe0000
@@ -570,7 +573,6 @@ uint32_t RVDebug::get_mem_u32_aligned(uint32_t addr) {
   load_prog("prog_get_set_u32", (uint32_t*)prog_get_set_u32, BIT_A0 | BIT_A1);
   set_data1(addr);
   run_prog_fast();
-
   auto result = get_data0();
 
   return result;
