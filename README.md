@@ -1,12 +1,22 @@
-# NOTE - This repo is not ready for public consumption yet, I need to fix up some issues created during refactoring and merge the standalone blink example into this repo for testing.
-
 # PicoRVD 
 
 This repo contains a GDB-compatible remote debug interface for the RISC-V based CH32V003 series of chips by WinChipHead.
 
+**This tool is very, very alpha - beware of bugs**
+
 The app runs on a Raspberry Pi Pico and can communicate with the CH32V003 via WCH's semi-proprietary single-wire (SWIO) interface.
 
 It allows you to program and debug a CH32V003 chip without needing the official WCH-Link dongle or a modified copy of OpenOCD.
+
+## Repo Structure
+
+**src** is the main codebase. It compiles using the Pico SDK + CMake.
+
+**src/singlewire.pio** is the Pico PIO code that generates SWIO waveforms on GP28
+
+**example** contains a trivial blink example that builds using cnlohr's "ch32v003fun" library. You will need gcc-riscv64-unknown-elf installed to build. See build.sh/flash.sh/debug.sh for basic usage.
+
+**test** contains just a simple tests to exercise aligned and unaligned reads/writes via the debug interface.
 
 ## Usage
 
@@ -53,9 +63,4 @@ See "Appendix E" here for spec - https://sourceware.org/gdb/current/onlinedocs/g
 
 ### Console
 A trivial serial console on UART0 (pins GP0/GP1) that implements methods for debugging the debugger itself and basic device inspection.
-
-## TODO
-
-SoftBreak should probably do more aggressive flash caching as GDB seems to do lots of tiny reads during stepping.
-
-If PicoRVD connects while the chip is in reset, it can get hung.
+Connect via "minicom -b 1000000 -D /dev/ttyACM0" (replace ttyACM0 with your debug probe port) and type "help" to get a list of commands.
