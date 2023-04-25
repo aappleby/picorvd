@@ -2,11 +2,11 @@
 
 This repo contains a GDB-compatible remote debug interface for the RISC-V based CH32V003 series of chips by WinChipHead.
 
-**This tool is very, very alpha - beware of bugs**
+It allows you to program and debug a CH32V003 chip without needing the proprietary WCH-Link dongle or a modified copy of OpenOCD.
 
 The app runs on a Raspberry Pi Pico and can communicate with the CH32V003 via WCH's semi-proprietary single-wire (SWIO) interface.
 
-It allows you to program and debug a CH32V003 chip without needing the official WCH-Link dongle or a modified copy of OpenOCD.
+**This tool is very, very alpha - beware of bugs**
 
 ## Repo Structure
 
