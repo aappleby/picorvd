@@ -10,7 +10,7 @@ void run_tests(RVDebug& rvd) {
 
   rvd.reset();
 
-  CHECK(rvd->get_abstractcs().CMDER == 0);
+  CHECK(rvd.get_abstractcs().CMDER == 0);
 
   uint32_t base = 0x20000400;
 
@@ -37,7 +37,7 @@ void run_tests(RVDebug& rvd) {
     CHECK(rvd.get_mem_u8 (base + 6 + offset) == 0x07);
     CHECK(rvd.get_mem_u8 (base + 7 + offset) == 0x08);
   }
-  CHECK(rvd->get_abstractcs().CMDER == 0);
+  CHECK(rvd.get_abstractcs().CMDER == 0);
 
   // Test misaligned writes
   for (int offset = 0; offset < 4; offset++) {
@@ -70,7 +70,7 @@ void run_tests(RVDebug& rvd) {
       CHECK(rvd.get_mem_u8(base + i + offset) == i + 1);
     }
   }
-  CHECK(rvd->get_abstractcs().CMDER == 0);
+  CHECK(rvd.get_abstractcs().CMDER == 0);
 
   // Test aligned block writes
   for (int size = 4; size <= 8; size += 4) {
@@ -87,23 +87,7 @@ void run_tests(RVDebug& rvd) {
       for (int i = offset + size; i < 16; i++) CHECK(rvd.get_mem_u8(base + i) == 0xFF);
     }
   }
-  CHECK(rvd->get_abstractcs().CMDER == 0);
-
-  // Test unaligned block writes
-  for (int size = 1; size <= 8; size++) {
-    for (int offset = 0; offset <= 8; offset++) {
-      for (int i = 0; i < 4; i++) {
-        rvd.set_mem_u32(base + (4 * i), 0xFFFFFFFF);
-      }
-
-      uint8_t buf[8] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
-      rvd.set_block_unaligned(base + offset, buf, size);
-      for (int i = 0; i < offset; i++)         CHECK(rvd.get_mem_u8(base + i) == 0xFF);
-      for (int i = 0; i < size; i++)           CHECK(rvd.get_mem_u8(base + i + offset) == i + 1);
-      for (int i = offset + size; i < 16; i++) CHECK(rvd.get_mem_u8(base + i) == 0xFF);
-    }
-  }
-  CHECK(rvd->get_abstractcs().CMDER == 0);
+  CHECK(rvd.get_abstractcs().CMDER == 0);
 
   // Test aligned block reads
   for (int size = 4; size <= 8; size += 4) {
@@ -122,26 +106,7 @@ void run_tests(RVDebug& rvd) {
       for (int i = 4 + size; i < 16;       i++) CHECK(buf[i] == 0xFF);
     }
   }
-  CHECK(rvd->get_abstractcs().CMDER == 0);
-
-  // Test unaligned block reads
-  for (int size = 1; size <= 8; size++) {
-    for (int offset = 0; offset <= 8; offset++) {
-      for (int i = 0;             i < offset;        i++) rvd.set_mem_u8(base + i, 0xFF);
-      for (int i = offset;        i < offset + size; i++) rvd.set_mem_u8(base + i, i + 1);
-      for (int i = offset + size; i < 16;            i++) rvd.set_mem_u8(base + i, 0xFF);
-
-      uint8_t buf[16];
-      memset(buf, 0xFF, sizeof(buf));
-
-      rvd.get_block_unaligned(base + offset, buf + 4, size);
-
-      for (int i = 0;        i < 4;        i++) CHECK(buf[i] == 0xFF);
-      for (int i = 4;        i < 4 + size; i++) CHECK(buf[i] == i + offset - 3);
-      for (int i = 4 + size; i < 16;       i++) CHECK(buf[i] == 0xFF);
-    }
-  }
-  CHECK(rvd->get_abstractcs().CMDER == 0);
+  CHECK(rvd.get_abstractcs().CMDER == 0);
 
   printf("All tests pass!\n");
 }

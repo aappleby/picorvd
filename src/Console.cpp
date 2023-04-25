@@ -36,6 +36,13 @@ struct ConsoleHandler {
 };
 
 ConsoleHandler handlers[] = {
+  {
+    "help",
+    [](Console& c) {
+      c.print_help();
+    }
+  },
+
   { "run_tests", [](Console& c) { run_tests(*c.rvd); } },
 
   {
@@ -133,7 +140,6 @@ ConsoleHandler handlers[] = {
     }
   },
 
-#if 1
   { "soft_halt",   [](Console& c) { c.soft->halt(); printf("Halted at DPC = 0x%08x\n", c.rvd->get_dpc()); } },
   { "soft_resume", [](Console& c) { c.soft->resume();         } },
   { "soft_step",   [](Console& c) { c.soft->step();           } },
@@ -163,10 +169,18 @@ ConsoleHandler handlers[] = {
 
   { "patch_flash",   [](Console& c) { c.soft->patch_flash(); } },
   { "unpatch_flash", [](Console& c) { c.soft->unpatch_flash(); } },
-#endif
 };
 
 static const int handler_count = sizeof(handlers) / sizeof(handlers[0]);
+
+//------------------------------------------------------------------------------
+
+void Console::print_help() {
+  printf("Commands:\n");
+  for (int i = 0; i < handler_count; i++) {
+    printf("  %s\n", handlers[i].name);
+  }
+}
 
 //------------------------------------------------------------------------------
 

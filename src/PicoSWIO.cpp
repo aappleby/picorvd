@@ -4,7 +4,7 @@
 
 #include "utils.h"
 
-#define DUMP_COMMANDS
+//#define DUMP_COMMANDS
 
 __attribute__((noinline)) void busy_wait(int count) {
   volatile int c = count;
@@ -79,7 +79,7 @@ uint32_t PicoSWIO::get(uint32_t addr) {
   pio_sm_put_blocking(pio0, 0, ((~addr) << 1) | 1);
   auto data = pio_sm_get_blocking(pio0, 0);
 #ifdef DUMP_COMMANDS
-  LOG("get_dbg %15s 0x%08x\n", addr_to_regname(addr), data);
+  printf("get_dbg %15s 0x%08x\n", addr_to_regname(addr), data);
 #endif
   return data;
 }
@@ -89,7 +89,7 @@ uint32_t PicoSWIO::get(uint32_t addr) {
 void PicoSWIO::put(uint32_t addr, uint32_t data) {
   cmd_count++;
 #ifdef DUMP_COMMANDS
-  LOG("set_dbg %15s 0x%08x\n", addr_to_regname(addr), data);
+  printf("set_dbg %15s 0x%08x\n", addr_to_regname(addr), data);
 #endif
   pio_sm_put_blocking(pio0, 0, ((~addr) << 1) | 0);
   pio_sm_put_blocking(pio0, 0, ~data);

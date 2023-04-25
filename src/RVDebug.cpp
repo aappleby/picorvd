@@ -601,20 +601,21 @@ void RVDebug::get_block_aligned(uint32_t addr, void *dst, int size_bytes) {
       0x00100073, // ebreak
   };
 
-  uint32_t *cursor = (uint32_t *)dst;
-  int size_dwords = (size_bytes / 4);
-
   load_prog("get_block_aligned", prog_get_block_aligned, BIT_A0 | BIT_A1);
   set_data1(addr);
-  run_prog_fast();
-  set_abstractauto(0x00000001);
 
-  for (int i = 0; i <= size_dwords; i++) {
-    if (i == size_dwords - 1) {
-      set_abstractauto(0x00000000);
+  bool first_word = true;
+  uint32_t *cursor = (uint32_t *)dst;
+  for (int i = 0; i < size_bytes / 4; i++) {
+    if (first_word) {
+      run_prog_fast();
+      set_abstractauto(0x00000001);
+      first_word = false;
     }
     cursor[i] = get_data0();
   }
+
+  set_abstractauto(0x00000000);
 }
 
 //------------------------------------------------------------------------------
@@ -631,19 +632,21 @@ void RVDebug::get_block_unaligned(uint32_t addr, void *dst, int size_bytes) {
       0x00100073, // ebreak
   };
 
-  uint8_t *cursor = (uint8_t *)dst;
-
   load_prog("get_block_unaligned", prog_get_block_unaligned, BIT_A0 | BIT_A1);
   set_data1(addr);
-  run_prog_fast();
-  set_abstractauto(0x00000001);
 
+  bool first_word = true;
+  uint8_t *cursor = (uint8_t *)dst;
   for (int i = 0; i < size_bytes; i++) {
-    if (i == size_bytes - 1) {
-      set_abstractauto(0x00000000);
+    if (first_word) {
+      run_prog_fast();
+      set_abstractauto(0x00000001);
+      first_word = false;
     }
     cursor[i] = get_data0();
   }
+
+  set_abstractauto(0x00000000);
 }
 
 //------------------------------------------------------------------------------
@@ -663,20 +666,21 @@ void RVDebug::set_block_aligned(uint32_t addr, void *src, int size_bytes) {
       0x00100073, // ebreak
   };
 
-  uint32_t *cursor = (uint32_t *)src;
-  int size_dwords = size_bytes / 4;
-
   load_prog("set_block_aligned", prog_set_block_aligned, BIT_A0 | BIT_A1);
   set_data1(addr);
-  run_prog_fast();
-  set_abstractauto(0x00000001);
 
-  for (int i = 0; i < size_dwords; i++) {
-    if (i == size_dwords - 1) {
-      set_abstractauto(0x00000000);
-    }
+  bool first_word = true;
+  uint32_t *cursor = (uint32_t *)src;
+  for (int i = 0; i < size_bytes / 4; i++) {
     set_data0(*cursor++);
+    if (first_word) {
+      run_prog_fast();
+      set_abstractauto(0x00000001);
+      first_word = false;
+    }
   }
+
+  set_abstractauto(0x00000000);
 }
 
 //------------------------------------------------------------------------------
@@ -695,16 +699,20 @@ void RVDebug::set_block_unaligned(uint32_t addr, void *src, int size_bytes) {
 
   load_prog("set_block_unaligned", prog_set_block_unaligned, BIT_A0 | BIT_A1);
   set_data1(addr);
-  run_prog_fast();
-  set_abstractauto(0x00000001);
 
+  bool first_word = true;
   uint8_t *cursor = (uint8_t *)src;
   for (int i = 0; i < size_bytes; i++) {
-    if (i == size_bytes - 1) {
-      set_abstractauto(0x00000000);
-    }
     set_data0(*cursor++);
+
+    if (first_word) {
+      run_prog_fast();
+      set_abstractauto(0x00000001);
+      first_word = false;
+    }
   }
+
+  set_abstractauto(0x00000000);
 }
 
 //------------------------------------------------------------------------------

@@ -301,7 +301,7 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* blob, int size) {
         // things break all weird
 
         // This run_prog _must_ include a busywait
-        rvd->run_prog_slow(); 
+        rvd->run_prog_slow();
         rvd->set_abstractauto(0x00000001);
         first_word = false;
       }
@@ -309,12 +309,12 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* blob, int size) {
         // We can write flash slightly faster if we only busy-wait at the end
         // of each page, but I am wary...
         // Waiting here takes 54443 us to write 564 bytes
-        while (rvd->get_abstractcs().BUSY) {}
+        //while (rvd->get_abstractcs().BUSY) {}
       }
     }
-    // This is the end of a page 
+    // This is the end of a page
     // Waiting here instead of the above takes 42847 us to write 564 bytes
-    //while (rvd->get_abstractcs().BUSY) {}
+    while (rvd->get_abstractcs().BUSY) {}
   }
 
   rvd->set_abstractauto(0x00000000);

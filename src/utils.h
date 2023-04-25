@@ -9,6 +9,8 @@ using getter = char (*)();
 
 void printf_color(const char* color, const char* fmt, ...);
 
+#if 1
+
 #define LOG_R(...) printf_color("1;31", __VA_ARGS__)
 #define LOG_G(...) printf_color("1;32", __VA_ARGS__)
 #define LOG_Y(...) printf_color("1;33", __VA_ARGS__)
@@ -17,6 +19,19 @@ void printf_color(const char* color, const char* fmt, ...);
 #define LOG_C(...) printf_color("1;36", __VA_ARGS__)
 #define LOG_W(...) printf_color("1;37", __VA_ARGS__)
 #define LOG(...)   printf(__VA_ARGS__)
+
+#else
+
+#define LOG_R(...)
+#define LOG_G(...)
+#define LOG_Y(...)
+#define LOG_B(...)
+#define LOG_M(...)
+#define LOG_C(...)
+#define LOG_W(...)
+#define LOG(...)
+
+#endif
 
 #define printf_r(...) printf_color("1;31", __VA_ARGS__)
 #define printf_g(...) printf_color("1;32", __VA_ARGS__)
@@ -37,9 +52,9 @@ void vprint_to(putter p, const char* fmt, va_list args);
 void print_to(putter p, const char* fmt, ...);
 char* atox(char* cursor, int& out);
 
-//#define CHECK(A, args...) if(!(A)) { printf_r("ASSERT FAIL %s %d\n", __FILE__, __LINE__); printf_r("" args); printf_r("\n"); while (1); }
+#define CHECK(A, args...) if(!(A)) { printf_r("ASSERT FAIL %s %d\n", __FILE__, __LINE__); printf_r("" args); printf_r("\n"); while (1); }
 
-#define CHECK(A, args...)
+//#define CHECK(A, args...)
 
 /*
 #define CHECK_EQ(A, B) { \

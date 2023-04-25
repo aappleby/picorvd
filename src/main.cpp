@@ -8,7 +8,7 @@
 #include "WCHFlash.h"
 #include "SoftBreak.h"
 #include "Console.h"
-#include "GDBServer.h"  
+#include "GDBServer.h"
 #include "debug_defines.h"
 #include "utils.h"
 
@@ -28,40 +28,40 @@ int main() {
   // Enable non-USB serial port on gpio 0/1 for meta-debug output :D
   stdio_uart_init_full(uart0, 1000000, PIN_UART_TX, PIN_UART_RX);
 
-  LOG_G("\n\n\n");
-  LOG_G("//==============================================================================\n");
-  LOG_G("// PicoRVD 0.0.2\n\n");
+  printf_g("\n\n\n");
+  printf_g("//==============================================================================\n");
+  printf_g("// PicoRVD 0.0.2\n\n");
 
-  LOG_G("// Starting PicoSWIO\n");
+  printf_g("// Starting PicoSWIO\n");
   PicoSWIO* swio = new PicoSWIO();
   swio->reset(PIN_SWIO);
 
-  LOG_G("// Starting RVDebug\n");
+  printf_g("// Starting RVDebug\n");
   RVDebug* rvd = new RVDebug(swio, 16);
   rvd->init();
   //rvd->dump();
 
-  LOG_G("// Starting WCHFlash\n");
+  printf_g("// Starting WCHFlash\n");
   WCHFlash* flash = new WCHFlash(rvd, ch32v003_flash_size);
   flash->reset();
   //flash->dump();
 
-  LOG_G("// Starting SoftBreak\n");
+  printf_g("// Starting SoftBreak\n");
   SoftBreak* soft = new SoftBreak(rvd, flash);
   soft->init();
   //soft->dump();
 
-  LOG_G("// Starting GDBServer\n");
+  printf_g("// Starting GDBServer\n");
   GDBServer* gdb = new GDBServer(rvd, flash, soft);
   gdb->reset();
   //gdb->dump();
 
-  LOG_G("// Starting Console\n");
+  printf_g("// Starting Console\n");
   Console* console = new Console(rvd, flash, soft);
   console->reset();
   //console->dump();
 
-  LOG_G("// Everything up and running!\n");
+  printf_g("// Everything up and running!\n");
 
   console->start();
   while (1) {
