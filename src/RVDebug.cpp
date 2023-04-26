@@ -613,15 +613,15 @@ void RVDebug::get_block_aligned(uint32_t addr, void *dst, int size_bytes) {
   load_prog("get_block_aligned", prog_get_block_aligned, BIT_A0 | BIT_A1);
   set_data1(addr);
 
+  int size_dwords = size_bytes / 4;
   uint32_t *cursor = (uint32_t *)dst;
 
-  int last_idx = (size_bytes / 4) - 1;
-
-  run_prog_fast();
-  set_abstractauto(0x00000001);
-
-  for (int i = 0; i <= last_idx; i++) {
-    if (i == last_idx) {
+  for (int i = 0; i < size_dwords; i++) {
+    if (i == 0) {
+      run_prog_fast();
+      set_abstractauto(0x00000001);
+    }
+    if (i == size_dwords - 1) {
       set_abstractauto(0x00000000);
     }
     cursor[i] = get_data0();
