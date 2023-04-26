@@ -20,7 +20,7 @@ The app runs on a Raspberry Pi Pico and can communicate with the CH32V003 via WC
 
 ## Usage
 
-Connect pin PD0 on your CH32V device to the Pico's SWIO pin (defaults to pin GP28), connect CH32V ground to Pico ground, and add a 1Kohm pull-up resistor from SWIO to +3.3v.
+Connect pin PD1 on your CH32V device to the Pico's SWIO pin (defaults to pin GP28), connect CH32V ground to Pico ground, and add a 1Kohm pull-up resistor from SWIO to +3.3v.
 
 After that run "gdb-multiarch {your_binary.elf}" and type "target extended-remote /dev/ttyACM0" to connect to the debugger (replace ttyACM0 with whatever port your Pico shows up as).
 
