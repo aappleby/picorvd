@@ -1,6 +1,11 @@
 #define SYSTEM_CORE_CLOCK 48000000
 #include "ch32v003fun.h"
 
+__attribute__((noinline)) void busywait(int x) {
+   for (volatile int i = 0; i < x; i++) {
+    }
+ }
+
 int main()
 {
   SystemInit48HSI();
@@ -16,17 +21,17 @@ int main()
   GPIOD->CFGLR |= (GPIO_Speed_50MHz | GPIO_CNF_OUT_PP)<<(4*4);
 
   for (int i = 0; i < 20; i++) {
-    GPIOD->BSHR  = (1<<0) | (1<<4);   // Turn on GPIOD0
-    for (volatile int i = 0; i < 80000; i++);
-    GPIOD->BSHR  = (1<<(16+0)) | (1<<(16+4)); // Turn off GPIOD0
-    for (volatile int i = 0; i < 80000; i++);
+    GPIOD->BSHR  = (1<<0) | (1<<4);
+    busywait(80000);
+    GPIOD->BSHR  = (1<<(16+0)) | (1<<(16+4));
+    busywait(80000);
   }
 
   while(1)
   {
     GPIOD->BSHR = (1<<0) | (1<<4);   // Turn on GPIOD0
-    for (volatile int i = 0; i < 300000; i++);
+    busywait(300000);
     GPIOD->BSHR = (1<<(16+0)) | (1<<(16+4)); // Turn off GPIOD0
-    for (volatile int i = 0; i < 300000; i++);
+    busywait(300000);
   }
 }

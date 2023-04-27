@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+  {
+    "name": "Debug Blink on PicoRVD",
+    "type": "cppdbg",
+    "request": "launch",
+    "cwd": "${workspaceFolder}",
+    "program": "${workspaceFolder}/bin/blink.elf",
+    "MIMode": "gdb",
+    "miDebuggerPath": "/usr/bin/gdb-multiarch",
+    "miDebuggerServerAddress": "/dev/ttyACM1", // Change this to your Pico's USB serial port
+    "setupCommands": [
+        {
+            "description": "Enable pretty-printing for gdb",
+            "text": "-enable-pretty-printing",
+            "ignoreFailures": true
+        },
+    ]
+  }
+  ]
+}
