@@ -5,7 +5,9 @@
 #include "WCHFlash.h"
 #include "SoftBreak.h"
 #include "test/tests.h"
+#ifdef INCLUDE_BLINKY_BINARY
 #include "example/bin/blink.h"
+#endif
 
 #include <functional>
 #include "pico/stdlib.h"
@@ -126,7 +128,7 @@ ConsoleHandler handlers[] = {
   { "unlock_flash",  [](Console& c) { c.flash->unlock_flash();   } },
   { "wipe_chip",     [](Console& c) { c.flash->wipe_chip();      } },
   { "flash_status",  [](Console& c) { c.flash->dump(); } },
-
+#ifdef INCLUDE_BLINKY_BINARY
   {
     "write_flash",
     [](Console& c) {
@@ -152,7 +154,7 @@ ConsoleHandler handlers[] = {
       printf_b("Done in %d usec, %f bytes/sec\n", time_b - time_a,  1000000.0 * float(len) / float(time_b - time_a));
     }
   },
-
+#endif
   { "soft_halt",   [](Console& c) { c.soft->halt(); printf("Halted at DPC = 0x%08x\n", c.rvd->get_dpc()); } },
   { "soft_resume", [](Console& c) { c.soft->resume();         } },
   { "soft_step",   [](Console& c) { c.soft->step();           } },
