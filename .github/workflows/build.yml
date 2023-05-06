@@ -1,0 +1,72 @@
+name: Build Firmware
+on: [push, pull_request]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout PicoRVD
+        uses: actions/checkout@v3
+        with:
+          path: PicoRVD
+
+      - name: Checkout pico-sdk/master
+        uses: actions/checkout@v3
+        with:
+          repository: raspberrypi/pico-sdk
+          ref: master
+          path: pico-sdk
+
+      - name: Checkout pico-sdk submodules
+        working-directory: ${{github.workspace}}/pico-sdk
+        run: git submodule update --init
+
+      - name: Install dependencies (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        working-directory: ${{github.workspace}}/PicoRVD
+        run: choco install .github/workflows/choco_packages.config
+
+      - name: Install dependencies (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: sudo apt-get update && sudo apt-get install -y build-essential git cmake gcc-arm-none-eabi gcc-riscv64-unknown-elf
+
+      - name: Install dependencies (Mac)
+        if: ${{ matrix.os == 'macos-13' }}
+        run: |
+          brew install cmake make
+          brew tap ArmMbed/homebrew-formulae
+          brew install arm-none-eabi-gcc
+          brew tap riscv-software-src/riscv
+          brew install riscv-tools
+
+      - name: Build Project (CH32V003 Blinky)
+        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-13' }}
+        working-directory: ${{github.workspace}}/PicoRVD
+        shell: bash
+        run: |
+          cd example
+          ./build.sh
+
+      - name: Build Project (PicoRVD)
+        working-directory: ${{github.workspace}}/PicoRVD
+        # bash required otherwise this mysteriously (no error) fails at "Generating cyw43_bus_pio_spi.pio.h"
+        shell: bash
+        run: |
+          mkdir bin
+          INCLUDE_BIN=ON
+          if [ "$RUNNER_OS" == "Windows" ]; then
+              INCLUDE_BIN=OFF
+          fi
+          cmake -B bin -G "Unix Makefiles" -DPICO_SDK_PATH=../pico-sdk -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DINCLUDE_BLINKY_BINARY:BOOL=$INCLUDE_BIN -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico
+          make -j8 -C bin
+
+      - name: Upload UF2 File
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: PicoRVD.uf2
+          path: ${{github.workspace}}/PicoRVD/bin/picorvd.uf2

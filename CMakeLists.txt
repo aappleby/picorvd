@@ -6,6 +6,8 @@ project(PicoRVD C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 23)
 
+option(INCLUDE_BLINKY_BINARY "Include Blinky binary in PicoRVD" ON) 
+
 pico_sdk_init()
 add_executable(
   picorvd
@@ -27,6 +29,10 @@ pico_generate_pio_header(picorvd ${CMAKE_CURRENT_SOURCE_DIR}/src/singlewire.pio)
 
 #target_compile_definitions(picorvd PRIVATE PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=100) # wait for USB connect
 target_compile_definitions(picorvd PRIVATE PARAM_ASSERTIONS_ENABLE_ALL=1)
+
+if(INCLUDE_BLINKY_BINARY)
+    add_definitions(-DINCLUDE_BLINKY_BINARY)
+endif(INCLUDE_BLINKY_BINARY)
 
 target_include_directories(picorvd PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
