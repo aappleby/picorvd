@@ -4,7 +4,7 @@
 #include "RVDebug.h"
 #include "WCHFlash.h"
 #include "SoftBreak.h"
-#include "test/tests.h"
+#include "test/picorvd_tests.h"
 #ifdef INCLUDE_BLINKY_BINARY
 #include "example/bin/blink.h"
 #endif
