@@ -21,7 +21,7 @@ add_executable(
   src/GDBServer.cpp
   src/utils.cpp
   src/usb_config.cpp
-  test/tests.cpp
+  test/picorvd_tests.cpp
   bin/singlewire.pio.h
 )
 
