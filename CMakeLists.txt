@@ -4,7 +4,7 @@ include(pico_sdk_import.cmake)
 project(PicoRVD C CXX ASM)
 
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
 
 option(INCLUDE_BLINKY_BINARY "Include Blinky binary in PicoRVD" ON) 
 
