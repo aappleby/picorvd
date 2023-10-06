@@ -30,9 +30,14 @@ Not all GDB remote functionality is implemented, but read/write of RAM, erasing/
 
 ## Building:
 
-Make sure PICO_SDK_PATH is set in your environment for release 1.5.0 and run "build.sh" to compile.
+Install the prerequisites:
+```
+sudo apt install cmake gcc-arm-none-eabi gcc-riscv64-unknown-elf xxd
+```
 
-Run "upload.sh" to upload the app to your Pico if it's connected to a Pico Debug Probe, or just use the standard hold-reset-and-reboot to mount your Pico as a flash drive and then copy bin/picorvd.uf2 to it.
+Then run build.sh in the repo root. CMake should auto-fetch the Pico SDK as part of the build process.
+
+Run "upload.sh" to upload PicoRVD to your Pico if it's connected to a Pico Debug Probe, or just use the standard hold-reset-and-reboot to mount your Pico as a flash drive and then copy bin/picorvd.uf2 to it.
 
 ## Modules
 
