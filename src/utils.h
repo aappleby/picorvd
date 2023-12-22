@@ -1,6 +1,7 @@
 #pragma once
 #include <stdarg.h>
 #include <stdio.h>
+#include <cstdint>
 
 using putter = void (*)(char);
 using getter = char (*)();
