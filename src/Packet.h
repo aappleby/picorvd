@@ -347,7 +347,7 @@ struct Packet {
   //----------------------------------------
 
   int    sentinel1 = 0xDEADBEEF;
-  char   buf[8192]; // FIXME why 8k? are we setting the gdb max packet size correctly?
+  char   buf[16384];
   int    sentinel2 = 0xF00DCAFE;
   int    size = 0;
   bool   error = false;
