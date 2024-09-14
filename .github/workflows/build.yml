@@ -6,7 +6,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13]
+        os: [ubuntu-latest, windows-latest, macos-14]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout PicoRVD
@@ -14,11 +14,11 @@ jobs:
         with:
           path: PicoRVD
 
-      - name: Checkout pico-sdk/master
+      - name: Checkout pico-sdk/1.5.1
         uses: actions/checkout@v3
         with:
           repository: raspberrypi/pico-sdk
-          ref: master
+          ref: 1.5.1
           path: pico-sdk
 
       - name: Checkout pico-sdk submodules
@@ -35,16 +35,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y build-essential git cmake gcc-arm-none-eabi gcc-riscv64-unknown-elf
 
       - name: Install dependencies (Mac)
-        if: ${{ matrix.os == 'macos-13' }}
+        if: ${{ matrix.os == 'macos-14' }}
         run: |
           brew install cmake make
-          brew tap ArmMbed/homebrew-formulae
-          brew install arm-none-eabi-gcc
+          brew install gcc-arm-embedded
           brew tap riscv-software-src/riscv
           brew install riscv-tools
 
       - name: Build Project (CH32V003 Blinky)
-        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-13' }}
+        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-14' }}
         working-directory: ${{github.workspace}}/PicoRVD
         shell: bash
         run: |
