@@ -8,7 +8,7 @@ project(PicoRVD C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 
-option(INCLUDE_BLINKY_BINARY "Include Blinky binary in PicoRVD" ON) 
+# option(INCLUDE_BLINKY_BINARY "Include Blinky binary in PicoRVD" ON) 
 
 pico_sdk_init()
 add_executable(
