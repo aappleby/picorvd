@@ -1,4 +1,3 @@
-#define SYSTEM_CORE_CLOCK 48000000
 #include "ch32v003fun.h"
 
 __attribute__((noinline)) void busywait(int x) {
@@ -8,7 +7,7 @@ __attribute__((noinline)) void busywait(int x) {
 
 int main()
 {
-  SystemInit48HSI();
+  SystemInit();
 
   // Enable GPIOD.
   RCC->APB2PCENR |= RCC_APB2Periph_GPIOD;
