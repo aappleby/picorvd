@@ -58,10 +58,10 @@ void PicoSWIO::reset(int pin) {
   // If we use the sdk functions to do this we get jitter :/
   sio_hw->gpio_clr    = (1 << pin);
   sio_hw->gpio_oe_set = (1 << pin);
-  iobank0_hw->io[pin].ctrl = GPIO_FUNC_SIO << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB;
+  io_bank0_hw->io[pin].ctrl = GPIO_FUNC_SIO << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB;
   busy_wait(100); // ~8 usec
   sio_hw->gpio_oe_clr = (1 << pin);
-  iobank0_hw->io[pin].ctrl = GPIO_FUNC_PIO0 << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB;
+  io_bank0_hw->io[pin].ctrl = GPIO_FUNC_PIO0 << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB;
 
   // Enable debug output pin on target
   put(WCH_DM_SHDWCFGR, 0x5AA50400);
