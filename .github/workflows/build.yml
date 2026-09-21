@@ -6,16 +6,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-14]
+        os: [ubuntu-latest, windows-latest, macos-15]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout PicoRVD
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           path: PicoRVD
 
       - name: Checkout pico-sdk/1.5.1
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           repository: raspberrypi/pico-sdk
           ref: 1.5.1
@@ -24,26 +24,49 @@ jobs:
       - name: Checkout pico-sdk submodules
         working-directory: ${{github.workspace}}/pico-sdk
         run: git submodule update --init
+      
+      - name: Patch Pico SDK 1.5.1 for CMake 4
+        if: ${{ matrix.os == 'windows-latest' || matrix.os == 'macos-15' }}
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            sed -i '' \
+              's/cmake_minimum_required(VERSION 3.4)/cmake_minimum_required(VERSION 3.5)/' \
+              "${{ github.workspace }}/pico-sdk/tools/pioasm/CMakeLists.txt"
+          else
+            sed -i \
+              's/cmake_minimum_required(VERSION 3.4)/cmake_minimum_required(VERSION 3.5)/' \
+              "${{ github.workspace }}/pico-sdk/tools/pioasm/CMakeLists.txt"
+          fi
 
       - name: Install dependencies (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
         working-directory: ${{github.workspace}}/PicoRVD
         run: choco install .github/workflows/choco_packages.config
 
+      - name: Check dependencies (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: bash
+        run: |
+          cmake --version
+          make --version
+          arm-none-eabi-gcc --version
+          command -v xxd
+
       - name: Install dependencies (Linux)
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update && sudo apt-get install -y build-essential git cmake gcc-arm-none-eabi gcc-riscv64-unknown-elf
 
       - name: Install dependencies (Mac)
-        if: ${{ matrix.os == 'macos-14' }}
+        if: ${{ matrix.os == 'macos-15' }}
         run: |
-          brew install cmake make
-          brew install gcc-arm-embedded
+          brew install --cask gcc-arm-embedded
           brew tap riscv-software-src/riscv
+          brew trust riscv-software-src/riscv
           brew install riscv-tools
 
       - name: Build Project (CH32V003 Blinky)
-        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-14' }}
+        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-15' }}
         working-directory: ${{github.workspace}}/PicoRVD
         shell: bash
         run: |
@@ -65,7 +88,7 @@ jobs:
 
       - name: Upload UF2 File
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v7
         with:
           name: PicoRVD.uf2
           path: ${{github.workspace}}/PicoRVD/bin/picorvd.uf2
