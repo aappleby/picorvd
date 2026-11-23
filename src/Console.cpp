@@ -3,7 +3,7 @@
 #include "utils.h"
 #include "RVDebug.h"
 #include "WCHFlash.h"
-#include "SoftBreak.h"
+#include "Breakpoints.h"
 #include "test/picorvd_tests.h"
 #ifdef INCLUDE_BLINKY_BINARY
 #include "example/bin/blink.h"
@@ -14,7 +14,7 @@
 
 //------------------------------------------------------------------------------
 
-Console::Console(RVDebug* rvd, WCHFlash* flash, SoftBreak* soft) {
+Console::Console(RVDebug* rvd, WCHFlash* flash, Breakpoints* soft) {
   this->rvd = rvd;
   this->flash = flash;
   this->soft = soft;

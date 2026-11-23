@@ -16,7 +16,8 @@ add_executable(
   src/main.cpp
   src/PicoSWIO.cpp
   src/RVDebug.cpp
-  src/WCHFlash.cpp
+  src/Target.cpp
+  src/WCHFlash_CH32V003.cpp
   src/SoftBreak.cpp
   src/Packet.cpp
   src/Console.cpp

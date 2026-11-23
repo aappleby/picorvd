@@ -1,7 +1,7 @@
 #include "GDBServer.h"
 
 #include "utils.h"
-#include "SoftBreak.h"
+#include "Breakpoints.h"
 #include "RVDebug.h"
 #include "WCHFlash.h"
 
@@ -21,22 +21,14 @@ uint32_t swap(uint32_t x) {
   return (a << 24) | (b << 16) | (c << 8) | (d << 0);
 }
 
-const char* memory_map = R"(<?xml version="1.0"?>
-<!DOCTYPE memory-map PUBLIC "+//IDN gnu.org//DTD GDB Memory Map V1.0//EN" "http://sourceware.org/gdb/gdb-memory-map.dtd">
-<memory-map>
-  <memory type="flash" start="0x00000000" length="0x4000">
-    <property name="blocksize">64</property>
-  </memory>
-  <memory type="ram" start="0x20000000" length="0x800"/>
-</memory-map>
-)";
 
 //------------------------------------------------------------------------------
 
-GDBServer::GDBServer(RVDebug* rvd, WCHFlash* flash, SoftBreak* soft) {
+GDBServer::GDBServer(RVDebug* rvd, WCHFlash* flash, Breakpoints* soft, const char* memory_map) {
   this->rvd = rvd;
   this->flash = flash;
   this->soft = soft;
+  this->memory_map = memory_map;
   this->page_cache = new uint8_t[flash->get_page_size()];
 }
 
