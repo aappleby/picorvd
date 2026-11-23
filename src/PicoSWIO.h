@@ -12,7 +12,9 @@ struct Reg_SHDWCFGR;
 //------------------------------------------------------------------------------
 
 struct PicoSWIO : public Bus {
-  void reset(int swd_pin);
+  // clkdiv: PIO clock divider. 12 suits the CH32V003 (24 MHz HSI); targets
+  // with a slower debug clock need a larger one.
+  void reset(int swd_pin, float clkdiv = 12);
 
   uint32_t get(uint32_t addr) override;
   void     put(uint32_t addr, uint32_t data) override;

@@ -1,7 +1,7 @@
 #include "GDBServer.h"
 
 #include "utils.h"
-#include "SoftBreak.h"
+#include "Breakpoints.h"
 #include "RVDebug.h"
 #include "WCHFlash.h"
 
@@ -21,22 +21,14 @@ uint32_t swap(uint32_t x) {
   return (a << 24) | (b << 16) | (c << 8) | (d << 0);
 }
 
-const char* memory_map = R"(<?xml version="1.0"?>
-<!DOCTYPE memory-map PUBLIC "+//IDN gnu.org//DTD GDB Memory Map V1.0//EN" "http://sourceware.org/gdb/gdb-memory-map.dtd">
-<memory-map>
-  <memory type="flash" start="0x00000000" length="0x4000">
-    <property name="blocksize">64</property>
-  </memory>
-  <memory type="ram" start="0x20000000" length="0x800"/>
-</memory-map>
-)";
 
 //------------------------------------------------------------------------------
 
-GDBServer::GDBServer(RVDebug* rvd, WCHFlash* flash, SoftBreak* soft) {
+GDBServer::GDBServer(RVDebug* rvd, WCHFlash* flash, Breakpoints* soft, const char* memory_map) {
   this->rvd = rvd;
   this->flash = flash;
   this->soft = soft;
+  this->memory_map = memory_map;
   this->page_cache = new uint8_t[flash->get_page_size()];
 }
 
@@ -158,15 +150,17 @@ void GDBServer::handle_g() {
   recv.take('g');
 
   if (!recv.error) {
-    uint32_t buf1[17];
+    // GPRs followed by the PC: 16 + 1 on RV32E, 32 + 1 on RV32I.
+    uint32_t buf1[33];
+    int count = rvd->get_gpr_count();
 
-    for (int i = 0; i < rvd->get_gpr_count(); i++) {
+    for (int i = 0; i < count; i++) {
       buf1[i] = rvd->get_gpr(i);
     }
-    buf1[16] = rvd->get_dpc();
+    buf1[count] = rvd->get_dpc();
 
     send.start_packet();
-    for (int i = 0; i < 17; i++) {
+    for (int i = 0; i <= count; i++) {
       send.put_hex_u32(buf1[i]);
     }
     send.end_packet();
@@ -312,7 +306,12 @@ void GDBServer::handle_p() {
   recv.take('p');
   int gpr = recv.take_hex();
 
-  if (!recv.error) {
+  if (!recv.error && gpr > rvd->get_gpr_count()) {
+    // Not a GPR or the PC (e.g. a CSR GDB probes for): report it unavailable
+    // instead of reading a nonexistent GPR.
+    send.set_packet("E01");
+  }
+  else if (!recv.error) {
     send.start_packet();
     if (gpr == rvd->get_gpr_count()) {
       send.put_hex_u32(rvd->get_dpc());
@@ -384,7 +383,11 @@ void GDBServer::handle_q() {
   else if (recv.match_prefix("qSupported")) {
     // FIXME we're ignoring the contents of qSupported
     recv.cursor2 = recv.buf + recv.size;
-    send.set_packet("PacketSize=32768;qXfer:memory-map:read+");
+    // PacketSize is hexadecimal: "32768" would be 0x32768 = 206696 bytes,
+    // far more than Packet's 16384-byte buffer, so a large 'M' or vFlashWrite
+    // packet would overrun it. 0x400 also keeps each vFlashWrite small enough
+    // to be programmed and acknowledged within GDB's default remote timeout.
+    send.set_packet("PacketSize=400;qXfer:memory-map:read+");
   }
   else if (recv.match_prefix("qXfer:")) {
     if (recv.match_prefix("memory-map:read::")) {
@@ -466,7 +469,12 @@ void GDBServer::handle_v() {
     }
     else if (recv.match_prefix("Done")) {
       flush_flash_cache();
-      send.set_packet("OK");
+      // Leave the controller locked, as after a reset: firmware that unlocks
+      // flash itself must not find it already unlocked.
+      flash->lock_flash();
+      flash_session = false;
+      send.set_packet(flash->error ? "E01" : "OK");
+      flash->error = false;
     }
     else if (recv.match_prefix("Erase")) {
       recv.take(':');
@@ -479,7 +487,7 @@ void GDBServer::handle_v() {
       }
       else {
         flash_erase(addr, size);
-        send.set_packet("OK");
+        if (!send.packet_valid) send.set_packet(flash->error ? "E01" : "OK");
       }
 
     }
@@ -523,9 +531,9 @@ void GDBServer::handle_Z0() {
   uint32_t kind = recv.take_hex();
 
   //LOG("GDBServer::handle_Z0 0x%08x 0x%08x\n", addr, kind);
-  soft->set_breakpoint(addr, kind);
+  int slot = soft->set_breakpoint(addr, kind);
 
-  send.set_packet("OK");
+  send.set_packet(slot < 0 ? "E01" : "OK");
   next_state = SEND_PREFIX;
 }
 
@@ -552,9 +560,9 @@ void GDBServer::handle_Z1() {
   uint32_t kind = recv.take_hex();
 
   //LOG("GDBServer::handle_Z1 0x%08x 0x%08x\n", addr, kind);
-  soft->set_breakpoint(addr, kind);
+  int slot = soft->set_breakpoint(addr, kind);
 
-  send.set_packet("OK");
+  send.set_packet(slot < 0 ? "E01" : "OK");
   next_state = SEND_PREFIX;
 }
 
@@ -573,11 +581,19 @@ void GDBServer::flash_erase(int addr, int size) {
     return;
   }
 
+  // First erase of a load: reset the target and keep it halted at the reset
+  // vector, so the old firmware (and any watchdog it started) is not running
+  // while its flash is replaced.
+  if (!flash_session) {
+    soft->reset();
+    flash->error = false;
+    flash_session = true;
+  }
+
   while (size) {
     if (addr == flash->get_flash_base() && size == flash_size) {
       //LOG("erase chip 0x%08x\n", addr);
       flash->wipe_chip();
-      send.set_packet("OK");
       addr += size;
       size -= size;
     }
@@ -595,10 +611,10 @@ void GDBServer::flash_erase(int addr, int size) {
     }
     else {
       CHECK(false, "Should not get here?");
+      send.set_packet("E00");
+      return;
     }
   }
-
-  send.set_packet("OK");
 }
 
 //------------------------------------------------------------------------------
@@ -613,13 +629,12 @@ void GDBServer::put_flash_cache(int addr, uint8_t data) {
   }
   this->page_base = page_base;
 
-  if (this->page_bitmap & (1 << page_offset)) {
-    LOG_R("\nByte in flash page written multiple times\n");
-  }
-  else {
-    this->page_cache[page_offset] = data;
-    this->page_bitmap |= (1ull << page_offset);
-  }
+  // The bitmap has 64 bits whatever the page size (one bit per byte for
+  // 64-byte pages, one per 4 bytes for 256-byte pages). It only records that
+  // the page has data to flush.
+  int bit = (page_offset * 64) / page_size;
+  this->page_cache[page_offset] = data;
+  this->page_bitmap |= (1ull << bit);
 }
 
 //------------------------------------------------------------------------------
@@ -645,7 +660,7 @@ void GDBServer::flush_flash_cache() {
 
   this->page_bitmap = 0;
   this->page_base = -1;
-  for (int i = 0; i < 64; i++) this->page_cache[i] = 0xFF;
+  for (int i = 0; i < flash->get_page_size(); i++) this->page_cache[i] = 0xFF;
 }
 
 //------------------------------------------------------------------------------
@@ -717,6 +732,7 @@ void GDBServer::update(bool connected, bool byte_ie, char byte_in, bool& byte_oe
     LOG("GDB disconnected\n");
     soft->clear_all_breakpoints();
     soft->resume();
+    flash_session = false;
     state = DISCONNECTED;
     next_state = DISCONNECTED;
   }

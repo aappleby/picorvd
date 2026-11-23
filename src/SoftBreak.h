@@ -10,28 +10,29 @@
 #include "utils.h"
 #include "RVDebug.h"
 #include "WCHFlash.h"
+#include "Breakpoints.h"
 
 //------------------------------------------------------------------------------
 
-struct SoftBreak {
+struct SoftBreak : public Breakpoints {
   SoftBreak(RVDebug* rvd, WCHFlash* flash);
-  void init();
-  void dump();
+  void init() override;
+  void dump() override;
 
-  void halt();
-  bool resume();
-  void reset();
-  void step();
-  bool is_halted();
+  void halt() override;
+  bool resume() override;
+  void reset() override;
+  void step() override;
+  bool is_halted() override;
 
-  void set_dpc(uint32_t pc);
+  void set_dpc(uint32_t pc) override;
 
-  int  set_breakpoint(uint32_t addr, int size);
-  int  clear_breakpoint(uint32_t addr, int size);
-  void clear_all_breakpoints();
-  bool has_breakpoint(uint32_t addr);
-  void patch_flash();
-  void unpatch_flash();
+  int  set_breakpoint(uint32_t addr, int size) override;
+  int  clear_breakpoint(uint32_t addr, int size) override;
+  void clear_all_breakpoints() override;
+  bool has_breakpoint(uint32_t addr) override;
+  void patch_flash() override;
+  void unpatch_flash() override;
 
   //----------------------------------------
 

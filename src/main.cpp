@@ -6,7 +6,8 @@
 #include "PicoSWIO.h"
 #include "RVDebug.h"
 #include "WCHFlash.h"
-#include "SoftBreak.h"
+#include "Breakpoints.h"
+#include "Target.h"
 #include "Console.h"
 #include "GDBServer.h"
 #include "debug_defines.h"
@@ -15,7 +16,12 @@
 const int PIN_SWIO = 28;
 const int PIN_UART_TX = 0;
 const int PIN_UART_RX = 1;
-const int ch32v003_flash_size = 16*1024;
+
+// Selected with the CMake option PICORVD_TARGET (see Target.cpp).
+#ifndef PICORVD_TARGET
+#define PICORVD_TARGET target_ch32v003
+#endif
+static const Target& target = PICORVD_TARGET;
 
 void delay_us(int us) {
   auto now = time_us_32();
@@ -30,29 +36,29 @@ int main() {
 
   printf_g("\n\n\n");
   printf_g("//==============================================================================\n");
-  printf_g("// PicoRVD 0.0.2\n\n");
+  printf_g("// PicoRVD 0.0.2 for %s\n\n", target.name);
 
   printf_g("// Starting PicoSWIO\n");
   PicoSWIO* swio = new PicoSWIO();
-  swio->reset(PIN_SWIO);
+  swio->reset(PIN_SWIO, target.swio_clkdiv);
 
   printf_g("// Starting RVDebug\n");
-  RVDebug* rvd = new RVDebug(swio, 16);
+  RVDebug* rvd = new RVDebug(swio, target.gpr_count, target.mem_access);
   rvd->init();
   //rvd->dump();
 
   printf_g("// Starting WCHFlash\n");
-  WCHFlash* flash = new WCHFlash(rvd, ch32v003_flash_size);
+  WCHFlash* flash = target.create_flash(rvd);
   flash->reset();
   //flash->dump();
 
-  printf_g("// Starting SoftBreak\n");
-  SoftBreak* soft = new SoftBreak(rvd, flash);
+  printf_g("// Starting breakpoints\n");
+  Breakpoints* soft = target.create_breakpoints(rvd, flash);
   soft->init();
   //soft->dump();
 
   printf_g("// Starting GDBServer\n");
-  GDBServer* gdb = new GDBServer(rvd, flash, soft);
+  GDBServer* gdb = new GDBServer(rvd, flash, soft, target.memory_map);
   gdb->reset();
   //gdb->dump();
 

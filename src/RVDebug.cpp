@@ -6,7 +6,7 @@
 
 //------------------------------------------------------------------------------
 
-RVDebug::RVDebug(Bus *dmi, int reg_count) : dmi(dmi) {
+RVDebug::RVDebug(Bus *dmi, int reg_count, MemAccess mem_access) : dmi(dmi), mem_access(mem_access) {
   this->reg_count = reg_count;
   init();
 }
@@ -37,6 +37,7 @@ bool RVDebug::halt() {
     LOG("ALLHALTED not set yet\n");
   }
   set_dmcontrol(0x00000001);
+  ack_reset();
 
   LOG("RVDebug::halt() done\n");
   return true;
@@ -47,10 +48,7 @@ bool RVDebug::halt() {
 bool RVDebug::resume() {
   LOG("RVDebug::resume()\n");
 
-  if (get_dmstatus().ALLHAVERESET) {
-    LOG("RVDebug::resume() - Can't resume while in reset!\n");
-    return false;
-  }
+  ack_reset();
 
   reload_regs();
   set_dmcontrol(0x40000001);
@@ -73,10 +71,7 @@ bool RVDebug::resume() {
 bool RVDebug::step() {
   LOG("RVDebug::step()\n");
 
-  if (get_dmstatus().ALLHAVERESET) {
-    LOG("RVDebug::step() - Can't step while in reset!\n");
-    return false;
-  }
+  ack_reset();
 
   Csr_DCSR dcsr = get_dcsr();
   dcsr.STEP = 1;
@@ -125,12 +120,35 @@ bool RVDebug::reset() {
 
   // Reset cached state
   init();
+  reset_count++;
 
   // Resetting the CPU also resets DCSR, redo it.
   enable_breakpoints();
 
   LOG("RVDebug::reset_cpu() done\n");
 
+  return true;
+}
+
+//------------------------------------------------------------------------------
+// A reset we did not request (firmware software reset, watchdog, power-on,
+// reset pin) sets DMSTATUS.havereset. Until it is acknowledged, resume() and
+// step() used to refuse to run the hart, so after the firmware reset itself
+// the target stayed halted when GDB detached. The reset also cleared the
+// program buffer and DCSR, so the cached copies are dropped and breakpoints
+// re-enabled. Call with the hart halted. Returns true if a reset was
+// acknowledged; get_reset_count() lets callers notice resets too.
+
+bool RVDebug::ack_reset() {
+  if (!get_dmstatus().ANYHAVERESET) return false;
+
+  printf_y("RVDebug: target was reset; acknowledged\n");
+  set_dmcontrol(0x10000001);  // ackhavereset, dmactive
+  set_dmcontrol(0x00000001);
+
+  init();
+  reset_count++;
+  if (get_dmstatus().ALLHALTED) enable_breakpoints();
   return true;
 }
 
@@ -283,8 +301,17 @@ void RVDebug::set_dscratch1(uint32_t r) { set_csr(CSR_DSCRATCH1, r); }
 // Getting multiple GPRs via autoexec is not supported on CH32V003 :/
 
 uint32_t RVDebug::get_gpr(int index) {
-  if (index == 16) {
+  // Index reg_count is the PC (GDB's numbering): 16 on RV32E (CH32V003),
+  // 32 on RV32I. A hard-coded 16 would turn x16 (a6) into the PC on RV32I.
+  if (index == reg_count) {
     return get_dpc();
+  }
+
+  // A debugger program may have clobbered this register (A0/A1 after any
+  // memory access); its real value is the copy load_prog() saved, which
+  // reload_regs() puts back before the hart runs.
+  if (bit(cached_regs, index)) {
+    return reg_cache[index];
   }
 
   Reg_COMMAND cmd;
@@ -299,10 +326,18 @@ uint32_t RVDebug::get_gpr(int index) {
 //------------------------------------------------------------------------------
 
 void RVDebug::set_gpr(int index, uint32_t gpr) {
-  if (index == 16) {
+  if (index == reg_count) {
     set_dpc(gpr);
     return;
   } else {
+    // Keep the saved copy in step, so reload_regs() does not later overwrite
+    // this value with a stale one. The hardware register now holds the real
+    // value, so it is no longer dirty.
+    if (bit(cached_regs, index)) {
+      reg_cache[index] = gpr;
+      dirty_regs &= ~(1 << index);
+    }
+
     Reg_COMMAND cmd;
     cmd.REGNO = 0x1000 | index;
     cmd.WRITE = 1;
@@ -569,6 +604,7 @@ uint32_t RVDebug::get_mem_u32_aligned(uint32_t addr) {
     LOG_R("RVDebug::get_mem_u32_aligned() - Bad address 0x%08x\n", addr);
     return 0;
   }
+  if (mem_access == MEM_ABSTRACT) return get_mem_u32_abstract(addr);
 
   load_prog("prog_get_set_u32", (uint32_t*)prog_get_set_u32, BIT_A0 | BIT_A1);
   set_data1(addr);
@@ -585,6 +621,10 @@ void RVDebug::set_mem_u32_aligned(uint32_t addr, uint32_t data) {
     LOG_R("RVDebug::set_mem_u32_aligned - Bad alignment 0x%08x\n", addr);
     return;
   }
+  if (mem_access == MEM_ABSTRACT) {
+    set_mem_u32_abstract(addr, data);
+    return;
+  }
 
   load_prog("prog_get_set_u32", (uint32_t*)prog_get_set_u32, BIT_A0 | BIT_A1);
 
@@ -594,10 +634,106 @@ void RVDebug::set_mem_u32_aligned(uint32_t addr, uint32_t data) {
 }
 
 //------------------------------------------------------------------------------
+// MEM_ABSTRACT: memory access through abstract register transfers into A0/A1
+// and a one-instruction program buffer (debug spec 0.13). The two programs
+// differ only in their first word, so switching between them costs one
+// PROGBUF write. Only clobbers A0/A1.
+
+static uint16_t prog_lw_a1_a0[16] = {
+  0x410c, // c.lw   a1, 0(a0)
+  0x9002, // c.ebreak
+  0x9002, 0x9002, 0x9002, 0x9002, 0x9002, 0x9002,
+  0x9002, 0x9002, 0x9002, 0x9002, 0x9002, 0x9002, 0x9002, 0x9002,
+};
+
+static uint16_t prog_sw_a1_a0[16] = {
+  0xc10c, // c.sw   a1, 0(a0)
+  0x9002, // c.ebreak
+  0x9002, 0x9002, 0x9002, 0x9002, 0x9002, 0x9002,
+  0x9002, 0x9002, 0x9002, 0x9002, 0x9002, 0x9002, 0x9002, 0x9002,
+};
+
+static const int REGNO_A0 = 0x1000 | 10;
+static const int REGNO_A1 = 0x1000 | 11;
+
+static Reg_COMMAND reg_transfer(int regno, bool write, bool postexec) {
+  Reg_COMMAND cmd;
+  cmd.REGNO = regno;
+  cmd.WRITE = write;
+  cmd.TRANSFER = 1;
+  cmd.POSTEXEC = postexec;
+  cmd.AARSIZE = 2;
+  return cmd;
+}
+
+// Wait for an abstract command to finish and clear any error. Returns false
+// on error (reported unless quiet).
+bool RVDebug::abstract_wait(bool quiet) {
+  Reg_ABSTRACTCS cs = get_abstractcs();
+  for (int i = 0; cs.BUSY && i < 1000; i++) cs = get_abstractcs();
+  if (cs.BUSY || cs.CMDER) {
+    if (!quiet) {
+      LOG_R("RVDebug: abstract command %s, CMDERR %d\n", cs.BUSY ? "stuck busy" : "failed", (int)cs.CMDER);
+    }
+    clear_err();
+    return false;
+  }
+  return true;
+}
+
+// A target reset not yet acknowledged (see ack_reset()) clears the program
+// buffer while prog_cache still says it is loaded; the stale buffer then
+// faults (CMDERR 3). On a fault, reload the buffer and retry once.
+
+uint32_t RVDebug::get_mem_u32_abstract(uint32_t addr) {
+  for (int attempt = 0; attempt < 2; attempt++) {
+    load_prog("lw_a1_a0", (uint32_t*)prog_lw_a1_a0, BIT_A0 | BIT_A1);
+
+    set_data0(addr);
+    set_command(reg_transfer(REGNO_A0, true, true));   // a0 = addr; lw a1, 0(a0)
+    bool ok = abstract_wait(attempt == 0);
+    this->dirty_regs |= prog_will_clobber;
+    if (ok) {
+      set_command(reg_transfer(REGNO_A1, false, false)); // data0 = a1
+      if (attempt) printf_r("RVDebug: program buffer was lost; reloaded\n");
+      return get_data0();
+    }
+    for (int i = 0; i < 8; i++) prog_cache[i] = 0xDEADBEEF;  // force a full reload
+  }
+  return get_data0();
+}
+
+void RVDebug::set_mem_u32_abstract(uint32_t addr, uint32_t data) {
+  for (int attempt = 0; attempt < 2; attempt++) {
+    load_prog("sw_a1_a0", (uint32_t*)prog_sw_a1_a0, BIT_A0 | BIT_A1);
+
+    set_data0(addr);
+    set_command(reg_transfer(REGNO_A0, true, false));  // a0 = addr
+    set_data0(data);
+    set_command(reg_transfer(REGNO_A1, true, true));   // a1 = data; sw a1, 0(a0)
+    bool ok = abstract_wait(attempt == 0);
+    this->dirty_regs |= prog_will_clobber;
+    if (ok) {
+      if (attempt) printf_r("RVDebug: program buffer was lost; reloaded\n");
+      return;
+    }
+    for (int i = 0; i < 8; i++) prog_cache[i] = 0xDEADBEEF;  // force a full reload
+  }
+}
+
+//------------------------------------------------------------------------------
 
 void RVDebug::get_block_aligned(uint32_t addr, void *dst, int size_bytes) {
   CHECK((addr & 3) == 0, "RVDebug::get_block_aligned() bad address");
   CHECK((size_bytes & 3) == 0, "RVDebug::get_block_aligned() bad size");
+
+  if (mem_access == MEM_ABSTRACT) {
+    uint32_t *cursor = (uint32_t *)dst;
+    for (int i = 0; i < size_bytes / 4; i++) {
+      cursor[i] = get_mem_u32_abstract(addr + 4 * i);
+    }
+    return;
+  }
 
   static uint32_t prog_get_block_aligned[8] = {
       0xe0000537, // lui    a0, 0xE0000
@@ -633,6 +769,14 @@ void RVDebug::get_block_aligned(uint32_t addr, void *dst, int size_bytes) {
 void RVDebug::set_block_aligned(uint32_t addr, void *src, int size_bytes) {
   CHECK((addr & 3) == 0);
   CHECK((size_bytes & 3) == 0);
+
+  if (mem_access == MEM_ABSTRACT) {
+    uint32_t *cursor = (uint32_t *)src;
+    for (int i = 0; i < size_bytes / 4; i++) {
+      set_mem_u32_abstract(addr + 4 * i, cursor[i]);
+    }
+    return;
+  }
 
   static uint32_t prog_set_block_aligned[8] = {
       0xe0000537, // lui    a0, 0xE0000

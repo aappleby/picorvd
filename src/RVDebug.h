@@ -34,7 +34,18 @@ struct Csr_DCSR;
 //------------------------------------------------------------------------------
 
 struct RVDebug {
-  RVDebug(Bus* dmi, int reg_count);
+  // How memory is reached from the program buffer.
+  enum MemAccess {
+    // Programs read and write DATA0/DATA1 at their memory-mapped address
+    // 0xE00000F4/0xE00000F8 (CH32V003). Fast: blocks stream with autoexec.
+    MEM_DATA_MAPPED,
+    // Standard abstract register transfers into A0/A1 around a one-instruction
+    // program (debug spec 0.13, as OpenOCD does). For targets where that
+    // mapping is not documented, e.g. the CH32V4x7. One word at a time.
+    MEM_ABSTRACT,
+  };
+
+  RVDebug(Bus* dmi, int reg_count, MemAccess mem_access = MEM_DATA_MAPPED);
   ~RVDebug();
   void init();
   void dump();
@@ -47,6 +58,8 @@ struct RVDebug {
   bool step();
 
   bool reset();
+  bool ack_reset();
+  int  get_reset_count() { return reset_count; }
   bool clear_err();
   bool sanity();
   bool enable_breakpoints();
@@ -130,9 +143,13 @@ private:
 
   uint32_t get_mem_u32_aligned(uint32_t addr);
   void     set_mem_u32_aligned(uint32_t addr, uint32_t data);
+  uint32_t get_mem_u32_abstract(uint32_t addr);
+  void     set_mem_u32_abstract(uint32_t addr, uint32_t data);
+  bool     abstract_wait(bool quiet);
   void reload_regs();
 
   Bus* dmi;
+  MemAccess mem_access;
 
   // Cached target state, must stay in sync
   int reg_count;
@@ -144,6 +161,8 @@ private:
   uint32_t reg_cache[32];
   uint32_t dirty_regs = 0;  // bits are 1 if we modified the reg on device
   uint32_t cached_regs = 0; // bits are 1 if reg_cache[i] is valid
+
+  int reset_count = 0;      // target resets seen (ours and acknowledged ones)
 };
 
 //------------------------------------------------------------------------------

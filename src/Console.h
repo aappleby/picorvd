@@ -3,10 +3,10 @@
 
 struct RVDebug;
 struct WCHFlash;
-struct SoftBreak;
+struct Breakpoints;
 
 struct Console {
-  Console(RVDebug* rvd, WCHFlash* flash, SoftBreak* soft);
+  Console(RVDebug* rvd, WCHFlash* flash, Breakpoints* soft);
   void reset();
   void dump();
   void start();
@@ -19,5 +19,5 @@ struct Console {
 
   RVDebug* rvd;
   WCHFlash* flash;
-  SoftBreak* soft;
+  Breakpoints* soft;
 };

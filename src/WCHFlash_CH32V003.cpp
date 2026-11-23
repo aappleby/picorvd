@@ -1,4 +1,4 @@
-#include "WCHFlash.h"
+#include "WCHFlash_CH32V003.h"
 #include "utils.h"
 #include "RVDebug.h"
 
@@ -171,13 +171,13 @@ static_assert(sizeof(Reg_FLASH_OBR) == 4);
 
 //------------------------------------------------------------------------------
 
-WCHFlash::WCHFlash(RVDebug* rvd, int flash_size) : rvd(rvd), flash_size(flash_size) {}
+CH32V003Flash::CH32V003Flash(RVDebug* rvd, int flash_size) : rvd(rvd), flash_size(flash_size) {}
 
-void WCHFlash::reset() {}
+void CH32V003Flash::reset() { error = false; }
 
 //------------------------------------------------------------------------------
 
-void WCHFlash::lock_flash() {
+void CH32V003Flash::lock_flash() {
   auto ctlr = Reg_FLASH_CTLR(rvd->get_mem_u32(ADDR_FLASH_CTLR));
   ctlr.LOCK = true;
   ctlr.FLOCK = true;
@@ -191,7 +191,7 @@ void WCHFlash::lock_flash() {
 
 void delay_us(int us);
 
-void WCHFlash::unlock_flash() {
+void CH32V003Flash::unlock_flash() {
   rvd->set_mem_u32(ADDR_FLASH_KEYR,  0x45670123);
   rvd->set_mem_u32(ADDR_FLASH_KEYR,  0xCDEF89AB);
 
@@ -204,19 +204,19 @@ void WCHFlash::unlock_flash() {
 
 //------------------------------------------------------------------------------
 
-void WCHFlash::wipe_page(uint32_t dst_addr) {
+void CH32V003Flash::wipe_page(uint32_t dst_addr) {
   unlock_flash();
   dst_addr |= 0x08000000;
   run_flash_command(dst_addr, BIT_CTLR_FTER, BIT_CTLR_FTER | BIT_CTLR_STRT);
 }
 
-void WCHFlash::wipe_sector(uint32_t dst_addr) {
+void CH32V003Flash::wipe_sector(uint32_t dst_addr) {
   unlock_flash();
   dst_addr |= 0x08000000;
   run_flash_command(dst_addr, BIT_CTLR_PER, BIT_CTLR_PER | BIT_CTLR_STRT);
 }
 
-void WCHFlash::wipe_chip() {
+void CH32V003Flash::wipe_chip() {
   unlock_flash();
   uint32_t dst_addr = 0x08000000;
   run_flash_command(dst_addr, BIT_CTLR_MER, BIT_CTLR_MER | BIT_CTLR_STRT);
@@ -233,11 +233,11 @@ void WCHFlash::wipe_chip() {
 // good - 0x19e0006f
 // bad  - 0x00010040
 
-void WCHFlash::write_flash(uint32_t dst_addr, void* blob, int size) {
-  LOG("WCHFlash::write_flash(0x%08x, 0x%08x, %d)\n", dst_addr, blob, size);
+void CH32V003Flash::write_flash(uint32_t dst_addr, void* blob, int size) {
+  LOG("CH32V003Flash::write_flash(0x%08x, 0x%08x, %d)\n", dst_addr, blob, size);
   unlock_flash();
 
-  if (size % 4) LOG_R("WCHFlash::write_flash() - Bad size %d\n", size);
+  if (size % 4) LOG_R("CH32V003Flash::write_flash() - Bad size %d\n", size);
   int size_dwords = size / 4;
 
   dst_addr |= 0x08000000;
@@ -337,13 +337,13 @@ void WCHFlash::write_flash(uint32_t dst_addr, void* blob, int size) {
 
   //printf("busy_time %d\n", busy_time);
 
-  LOG("WCHFlash::write_flash() done\n");
+  LOG("CH32V003Flash::write_flash() done\n");
 }
 
 //------------------------------------------------------------------------------
 
-bool WCHFlash::verify_flash(uint32_t dst_addr, void* blob, int size) {
-  LOG("WCHFlash::verify_flash(0x%08x, 0x%08x, %d)\n", dst_addr, blob, size);
+bool CH32V003Flash::verify_flash(uint32_t dst_addr, void* blob, int size) {
+  LOG("CH32V003Flash::verify_flash(0x%08x, 0x%08x, %d)\n", dst_addr, blob, size);
 
   dst_addr |= 0x08000000;
 
@@ -361,7 +361,7 @@ bool WCHFlash::verify_flash(uint32_t dst_addr, void* blob, int size) {
 
   delete [] readback;
 
-  LOG("WCHFlash::verify_flash() done\n");
+  LOG("CH32V003Flash::verify_flash() done\n");
   return !mismatch;
 }
 
@@ -381,7 +381,7 @@ const uint32_t ADDR_FLASH_OBKEYR = 0x40022008;
  const uint32_t ADDR_FLASH_BKEYR  = 0x40022028;
 */
 
-void WCHFlash::dump() {
+void CH32V003Flash::dump() {
 
   printf_b("FLASH_ACTLR\n");
   printf("  0x%08x\n", rvd->get_mem_u32(ADDR_FLASH_ACTLR));
@@ -429,7 +429,7 @@ void WCHFlash::dump() {
 
 //------------------------------------------------------------------------------
 
-void WCHFlash::run_flash_command(uint32_t addr, uint32_t ctl1, uint32_t ctl2) {
+void CH32V003Flash::run_flash_command(uint32_t addr, uint32_t ctl1, uint32_t ctl2) {
   static const uint16_t prog_flash_command[16] = {
     0xc94c, // sw      a1,20(a0)
     0xc910, // sw      a2,16(a0)

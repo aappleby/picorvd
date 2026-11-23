@@ -16,8 +16,11 @@ add_executable(
   src/main.cpp
   src/PicoSWIO.cpp
   src/RVDebug.cpp
-  src/WCHFlash.cpp
+  src/Target.cpp
+  src/WCHFlash_CH32V003.cpp
+  src/WCHFlash_CH32V4x7.cpp
   src/SoftBreak.cpp
+  src/HardBreak.cpp
   src/Packet.cpp
   src/Console.cpp
   src/GDBServer.cpp
@@ -31,6 +34,14 @@ pico_generate_pio_header(picorvd ${CMAKE_CURRENT_SOURCE_DIR}/src/singlewire.pio)
 
 #target_compile_definitions(picorvd PRIVATE PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=100) # wait for USB connect
 target_compile_definitions(picorvd PRIVATE PARAM_ASSERTIONS_ENABLE_ALL=1)
+
+# Target chip. See src/Target.cpp for what each one sets.
+set(PICORVD_TARGET ch32v003 CACHE STRING "Target chip: ch32v003 or ch32v407")
+set_property(CACHE PICORVD_TARGET PROPERTY STRINGS ch32v003 ch32v407)
+if(NOT PICORVD_TARGET MATCHES "^(ch32v003|ch32v407)$")
+  message(FATAL_ERROR "Unknown PICORVD_TARGET '${PICORVD_TARGET}' (ch32v003 or ch32v407)")
+endif()
+target_compile_definitions(picorvd PRIVATE PICORVD_TARGET=target_${PICORVD_TARGET})
 
 if(INCLUDE_BLINKY_BINARY)
     add_definitions(-DINCLUDE_BLINKY_BINARY)

@@ -4,14 +4,15 @@
 
 struct RVDebug;
 struct WCHFlash;
-struct SoftBreak;
+struct Breakpoints;
 
 //------------------------------------------------------------------------------
 
 struct GDBServer {
 public:
 
-  GDBServer(RVDebug* rvd, WCHFlash* flash, SoftBreak* soft);
+  // memory_map: GDB memory-map XML describing the target (see Target.cpp).
+  GDBServer(RVDebug* rvd, WCHFlash* flash, Breakpoints* soft, const char* memory_map);
   void reset();
   void dump();
 
@@ -64,7 +65,8 @@ public:
 
   RVDebug* rvd = nullptr;
   WCHFlash* flash = nullptr;
-  SoftBreak* soft = nullptr;
+  Breakpoints* soft = nullptr;
+  const char* memory_map = nullptr;
 
   Packet   send;
   Packet   recv;
@@ -72,6 +74,7 @@ public:
   uint8_t* page_cache;
   int      page_base = -1;
   uint64_t page_bitmap = 0;
+  bool     flash_session = false;  // between the first vFlashErase and vFlashDone
 
   enum {
     DISCONNECTED,
