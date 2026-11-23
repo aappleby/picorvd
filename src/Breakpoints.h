@@ -2,6 +2,8 @@
 // Implementations:
 //   SoftBreak - patches ebreaks into flash on resume (CH32V003: no hardware
 //               triggers, small 64-byte erase pages).
+//   HardBreak - RISC-V trigger module (QingKe V4 cores such as the CH32V4x7,
+//               where the smallest erase is 4 KB and patching would wear flash).
 
 #pragma once
 #include <stdint.h>

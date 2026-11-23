@@ -1,5 +1,6 @@
 // Interface to a WCH flash controller, driven through the RVD interface.
-// Implementations: CH32V003Flash (WCHFlash_CH32V003.h).
+// Implementations: CH32V003Flash (WCHFlash_CH32V003.h) and CH32V4x7Flash
+// (WCHFlash_CH32V4x7.h).
 
 #pragma once
 #include <stdint.h>

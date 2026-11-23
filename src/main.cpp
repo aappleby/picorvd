@@ -43,7 +43,7 @@ int main() {
   swio->reset(PIN_SWIO, target.swio_clkdiv);
 
   printf_g("// Starting RVDebug\n");
-  RVDebug* rvd = new RVDebug(swio, target.gpr_count);
+  RVDebug* rvd = new RVDebug(swio, target.gpr_count, target.mem_access);
   rvd->init();
   //rvd->dump();
 

@@ -60,12 +60,17 @@ jobs:
           if [ "$RUNNER_OS" == "Windows" ]; then
               INCLUDE_BIN=OFF
           fi
-          cmake -B bin -G "Unix Makefiles" -DPICO_SDK_PATH=../pico-sdk -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DINCLUDE_BLINKY_BINARY:BOOL=$INCLUDE_BIN -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico
-          make -j8 -C bin
+          # One firmware per target chip (src/Target.cpp). The build directory
+          # must be bin/, so build them one after the other.
+          for TARGET in ch32v003 ch32v407; do
+              cmake -B bin -G "Unix Makefiles" -DPICO_SDK_PATH=../pico-sdk -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DINCLUDE_BLINKY_BINARY:BOOL=$INCLUDE_BIN -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico -DPICORVD_TARGET=$TARGET
+              make -j8 -C bin
+              cp bin/picorvd.uf2 picorvd-$TARGET.uf2
+          done
 
       - name: Upload UF2 File
         if: ${{ matrix.os == 'ubuntu-latest' }}
         uses: actions/upload-artifact@v3
         with:
           name: PicoRVD.uf2
-          path: ${{github.workspace}}/PicoRVD/bin/picorvd.uf2
+          path: ${{github.workspace}}/PicoRVD/picorvd-*.uf2
