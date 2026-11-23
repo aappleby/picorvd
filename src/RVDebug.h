@@ -47,6 +47,8 @@ struct RVDebug {
   bool step();
 
   bool reset();
+  bool ack_reset();
+  int  get_reset_count() { return reset_count; }
   bool clear_err();
   bool sanity();
   bool enable_breakpoints();
@@ -144,6 +146,8 @@ private:
   uint32_t reg_cache[32];
   uint32_t dirty_regs = 0;  // bits are 1 if we modified the reg on device
   uint32_t cached_regs = 0; // bits are 1 if reg_cache[i] is valid
+
+  int reset_count = 0;      // target resets seen (ours and acknowledged ones)
 };
 
 //------------------------------------------------------------------------------

@@ -37,6 +37,7 @@ bool RVDebug::halt() {
     LOG("ALLHALTED not set yet\n");
   }
   set_dmcontrol(0x00000001);
+  ack_reset();
 
   LOG("RVDebug::halt() done\n");
   return true;
@@ -47,10 +48,7 @@ bool RVDebug::halt() {
 bool RVDebug::resume() {
   LOG("RVDebug::resume()\n");
 
-  if (get_dmstatus().ALLHAVERESET) {
-    LOG("RVDebug::resume() - Can't resume while in reset!\n");
-    return false;
-  }
+  ack_reset();
 
   reload_regs();
   set_dmcontrol(0x40000001);
@@ -73,10 +71,7 @@ bool RVDebug::resume() {
 bool RVDebug::step() {
   LOG("RVDebug::step()\n");
 
-  if (get_dmstatus().ALLHAVERESET) {
-    LOG("RVDebug::step() - Can't step while in reset!\n");
-    return false;
-  }
+  ack_reset();
 
   Csr_DCSR dcsr = get_dcsr();
   dcsr.STEP = 1;
@@ -125,12 +120,35 @@ bool RVDebug::reset() {
 
   // Reset cached state
   init();
+  reset_count++;
 
   // Resetting the CPU also resets DCSR, redo it.
   enable_breakpoints();
 
   LOG("RVDebug::reset_cpu() done\n");
 
+  return true;
+}
+
+//------------------------------------------------------------------------------
+// A reset we did not request (firmware software reset, watchdog, power-on,
+// reset pin) sets DMSTATUS.havereset. Until it is acknowledged, resume() and
+// step() used to refuse to run the hart, so after the firmware reset itself
+// the target stayed halted when GDB detached. The reset also cleared the
+// program buffer and DCSR, so the cached copies are dropped and breakpoints
+// re-enabled. Call with the hart halted. Returns true if a reset was
+// acknowledged; get_reset_count() lets callers notice resets too.
+
+bool RVDebug::ack_reset() {
+  if (!get_dmstatus().ANYHAVERESET) return false;
+
+  printf_y("RVDebug: target was reset; acknowledged\n");
+  set_dmcontrol(0x10000001);  // ackhavereset, dmactive
+  set_dmcontrol(0x00000001);
+
+  init();
+  reset_count++;
+  if (get_dmstatus().ALLHALTED) enable_breakpoints();
   return true;
 }
 
@@ -287,6 +305,13 @@ uint32_t RVDebug::get_gpr(int index) {
     return get_dpc();
   }
 
+  // A debugger program may have clobbered this register (A0/A1 after any
+  // memory access); its real value is the copy load_prog() saved, which
+  // reload_regs() puts back before the hart runs.
+  if (bit(cached_regs, index)) {
+    return reg_cache[index];
+  }
+
   Reg_COMMAND cmd;
   cmd.REGNO = 0x1000 | index;
   cmd.TRANSFER = 1;
@@ -303,6 +328,14 @@ void RVDebug::set_gpr(int index, uint32_t gpr) {
     set_dpc(gpr);
     return;
   } else {
+    // Keep the saved copy in step, so reload_regs() does not later overwrite
+    // this value with a stale one. The hardware register now holds the real
+    // value, so it is no longer dirty.
+    if (bit(cached_regs, index)) {
+      reg_cache[index] = gpr;
+      dirty_regs &= ~(1 << index);
+    }
+
     Reg_COMMAND cmd;
     cmd.REGNO = 0x1000 | index;
     cmd.WRITE = 1;
