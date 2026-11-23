@@ -74,6 +74,7 @@ public:
   uint8_t* page_cache;
   int      page_base = -1;
   uint64_t page_bitmap = 0;
+  bool     flash_session = false;  // between the first vFlashErase and vFlashDone
 
   enum {
     DISCONNECTED,
