@@ -384,7 +384,11 @@ void GDBServer::handle_q() {
   else if (recv.match_prefix("qSupported")) {
     // FIXME we're ignoring the contents of qSupported
     recv.cursor2 = recv.buf + recv.size;
-    send.set_packet("PacketSize=32768;qXfer:memory-map:read+");
+    // PacketSize is hexadecimal: "32768" would be 0x32768 = 206696 bytes,
+    // far more than Packet's 16384-byte buffer, so a large 'M' or vFlashWrite
+    // packet would overrun it. 0x400 also keeps each vFlashWrite small enough
+    // to be programmed and acknowledged within GDB's default remote timeout.
+    send.set_packet("PacketSize=400;qXfer:memory-map:read+");
   }
   else if (recv.match_prefix("qXfer:")) {
     if (recv.match_prefix("memory-map:read::")) {
