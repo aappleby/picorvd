@@ -283,7 +283,9 @@ void RVDebug::set_dscratch1(uint32_t r) { set_csr(CSR_DSCRATCH1, r); }
 // Getting multiple GPRs via autoexec is not supported on CH32V003 :/
 
 uint32_t RVDebug::get_gpr(int index) {
-  if (index == 16) {
+  // Index reg_count is the PC (GDB's numbering): 16 on RV32E (CH32V003),
+  // 32 on RV32I. A hard-coded 16 would turn x16 (a6) into the PC on RV32I.
+  if (index == reg_count) {
     return get_dpc();
   }
 
@@ -299,7 +301,7 @@ uint32_t RVDebug::get_gpr(int index) {
 //------------------------------------------------------------------------------
 
 void RVDebug::set_gpr(int index, uint32_t gpr) {
-  if (index == 16) {
+  if (index == reg_count) {
     set_dpc(gpr);
     return;
   } else {
