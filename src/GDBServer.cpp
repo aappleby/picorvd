@@ -158,15 +158,17 @@ void GDBServer::handle_g() {
   recv.take('g');
 
   if (!recv.error) {
-    uint32_t buf1[17];
+    // GPRs followed by the PC: 16 + 1 on RV32E, 32 + 1 on RV32I.
+    uint32_t buf1[33];
+    int count = rvd->get_gpr_count();
 
-    for (int i = 0; i < rvd->get_gpr_count(); i++) {
+    for (int i = 0; i < count; i++) {
       buf1[i] = rvd->get_gpr(i);
     }
-    buf1[16] = rvd->get_dpc();
+    buf1[count] = rvd->get_dpc();
 
     send.start_packet();
-    for (int i = 0; i < 17; i++) {
+    for (int i = 0; i <= count; i++) {
       send.put_hex_u32(buf1[i]);
     }
     send.end_packet();
@@ -312,7 +314,12 @@ void GDBServer::handle_p() {
   recv.take('p');
   int gpr = recv.take_hex();
 
-  if (!recv.error) {
+  if (!recv.error && gpr > rvd->get_gpr_count()) {
+    // Not a GPR or the PC (e.g. a CSR GDB probes for): report it unavailable
+    // instead of reading a nonexistent GPR.
+    send.set_packet("E01");
+  }
+  else if (!recv.error) {
     send.start_packet();
     if (gpr == rvd->get_gpr_count()) {
       send.put_hex_u32(rvd->get_dpc());
